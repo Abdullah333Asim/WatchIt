@@ -1,0 +1,6 @@
+{
+  "name": "Cine Noir",
+  "description": "A cinematic movie discovery app with Tinder-style swiping and personalized AI recommendations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
