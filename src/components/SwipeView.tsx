@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion, useMotionValue, useTransform, useAnimation, AnimatePresence } from "motion/react";
 import { Star, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, X } from "lucide-react";
 import { extractDominantColor } from "../lib/color";
+import { fetchWithUser } from "../lib/api";
 
 interface Movie {
   id: string;
@@ -26,7 +27,7 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
   const nextMovie = movies[currentIndex + 1];
 
   const fetchMovies = (pageNum: number) => {
-    fetch(`/api/movies?page=${pageNum}`)
+    fetchWithUser(`/api/movies?page=${pageNum}`)
       .then(res => res.json())
       .then(data => {
         setMovies(prev => {
@@ -45,7 +46,7 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
   const handleSwipe = async (action: 'Watched' | 'Pass' | 'Watchlist' | 'Not Interested') => {
     if (!movie) return;
 
-    fetch('/api/swipe', {
+    fetchWithUser('/api/swipe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ movieId: movie.id, action })
@@ -79,11 +80,15 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
 
   return (
     <div className="max-w-md mx-auto px-6 pt-4 h-[calc(100vh-160px)] flex flex-col justify-between">
+      <div className="flex justify-center items-center gap-2 mb-2 text-white/50 text-xs font-bold uppercase tracking-wider animate-pulse pt-2">
+        <ArrowUp className="w-4 h-4 animate-bounce" />
+        <span>Swipe up to add to watchlist</span>
+      </div>
       <div className="relative w-full h-[530px] flex items-center justify-center perspective-1000">
         {/* Next Card (Background) */}
         {nextMovie && (
           <div className="absolute inset-0 w-full h-full rounded-2xl overflow-hidden shadow-2xl transform scale-95 translate-y-4 opacity-50 z-0 border border-white/5 bg-[#2b2a2a]">
-            <img src={nextMovie.poster_url} className="w-full h-full object-cover" alt="" />
+            <img src={nextMovie.poster_url || undefined} className="w-full h-full object-cover" alt="" />
             <div className="absolute inset-0 bg-gradient-to-t from-[#141313] via-transparent to-transparent" />
           </div>
         )}
@@ -99,23 +104,13 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
       </div>
 
       {/* Swipe Instructions */}
-      <div className="w-full flex justify-between items-center px-4 py-8 text-[#c9c6c5] text-[10px] sm:text-xs font-bold tracking-wider opacity-60">
-        <div className="flex flex-col items-center gap-1 w-24 text-center">
-          <ArrowLeft className="w-5 h-5 sm:w-6 sm:h-6 mb-1" />
+      <div className="w-full flex justify-between items-start px-4 py-8 text-white/50 text-[10px] sm:text-xs font-bold tracking-wider">
+        <div className="flex flex-col items-center gap-1 w-24 text-center animate-pulse">
+          <ArrowLeft className="w-5 h-5 sm:w-6 sm:h-6 mb-1 animate-bounce" />
           <span>HAVEN'T<br/>WATCHED</span>
         </div>
-        <div className="flex flex-col items-center justify-center gap-4 flex-1">
-          <div className="flex items-center gap-2">
-            <span>WATCHLIST</span>
-            <ArrowUp className="w-4 h-4 sm:w-5 sm:h-5" />
-          </div>
-          <div className="flex items-center gap-2">
-            <span>IGNORE</span>
-            <ArrowDown className="w-4 h-4 sm:w-5 sm:h-5" />
-          </div>
-        </div>
-        <div className="flex flex-col items-center gap-1 w-24 text-center">
-          <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 mb-1" />
+        <div className="flex flex-col items-center gap-1 w-24 text-center animate-pulse">
+          <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 mb-1 animate-bounce" />
           <span>WATCHED</span>
         </div>
       </div>
@@ -144,7 +139,7 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
                 <X className="w-5 h-5" />
               </button>
               <div className="relative h-64 shrink-0">
-                <img src={selectedMovie.poster_url} className="w-full h-full object-cover" alt="" />
+                <img src={selectedMovie.poster_url || undefined} className="w-full h-full object-cover" alt="" />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#141313] to-transparent" />
               </div>
               <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
@@ -182,10 +177,10 @@ function Card({ movie, onSwipe, onColorExtracted, onClick }: { movie: Movie, onS
   const opacity = useTransform(x, [-200, -150, 0, 150, 200], [0, 1, 1, 1, 0]);
   const scale = useTransform(x, [-200, 0, 200], [0.8, 1, 0.8]);
   
-  const likeOpacity = useTransform(x, [50, 150], [0, 1]);
-  const passOpacity = useTransform(x, [-150, -50], [1, 0]);
-  const watchlistOpacity = useTransform(y, [-150, -50], [1, 0]);
-  const notInterestedOpacity = useTransform(y, [50, 150], [0, 1]);
+  const likeOpacity = useTransform(x, [25, 75], [0, 1]);
+  const passOpacity = useTransform(x, [-75, -25], [1, 0]);
+  const watchlistOpacity = useTransform(y, [-75, -25], [1, 0]);
+  const notInterestedOpacity = useTransform(y, [25, 75], [0, 1]);
 
   const controls = useAnimation();
   const imgRef = useRef<HTMLImageElement>(null);
@@ -202,16 +197,16 @@ function Card({ movie, onSwipe, onColorExtracted, onClick }: { movie: Movie, onS
       isDragging.current = false;
     }, 100);
 
-    if (info.offset.x > 150) {
+    if (info.offset.x > 75) {
       await controls.start({ x: 1000, transition: { duration: 0.3 } });
       onSwipe('Watched');
-    } else if (info.offset.x < -150) {
+    } else if (info.offset.x < -75) {
       await controls.start({ x: -1000, transition: { duration: 0.3 } });
       onSwipe('Pass');
-    } else if (info.offset.y < -150) {
+    } else if (info.offset.y < -75) {
       await controls.start({ y: -1000, transition: { duration: 0.3 } });
       onSwipe('Watchlist');
-    } else if (info.offset.y > 150) {
+    } else if (info.offset.y > 75) {
       await controls.start({ y: 1000, transition: { duration: 0.3 } });
       onSwipe('Not Interested');
     } else {
@@ -239,7 +234,7 @@ function Card({ movie, onSwipe, onColorExtracted, onClick }: { movie: Movie, onS
     >
       <img 
         ref={imgRef}
-        src={movie.poster_url} 
+        src={movie.poster_url || undefined} 
         className="absolute inset-0 w-full h-full object-cover" 
         alt={movie.title} 
         referrerPolicy="no-referrer"

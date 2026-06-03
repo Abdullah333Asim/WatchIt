@@ -3,18 +3,61 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import db from "./server/db.ts";
 import { getRecommendations } from "./server/gemini.ts";
-import { randomUUID } from "crypto";
+import { randomUUID, createHash } from "crypto";
 import { loadPopularMovies } from "./server/tmdb.ts";
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: "50mb" }));
 
   // API Routes
+  app.use("/api", (req, res, next) => {
+    const userId = req.headers["x-user-id"] as string;
+    if (userId && userId !== "default-user") {
+      const user = db.prepare("SELECT id FROM users WHERE id = ?").get(userId);
+      if (!user) {
+        // Recreate missing user to handle transient sqlite resets in deployed environments
+        db.prepare(`
+          INSERT OR IGNORE INTO users (id, name, bio, avatar_url, taste_dna)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(userId, "Anonymous Cinephile", "Just Joined", "https://api.dicebear.com/7.x/avataaars/svg?seed=" + userId, JSON.stringify({}));
+      }
+    }
+    next();
+  });
+
+  app.post("/api/login", (req, res) => {
+    const { username, password } = req.body;
+    if (!username) return res.status(400).json({ error: "Username required" });
+    if (!password) return res.status(400).json({ error: "Password required" });
+    
+    try {
+      const hashedPassword = createHash('sha256').update(password).digest('hex');
+      let user = db.prepare("SELECT * FROM users WHERE name = ? COLLATE NOCASE").get(username) as any;
+      if (!user) {
+        const id = randomUUID();
+        db.prepare(`
+          INSERT INTO users (id, name, bio, avatar_url, taste_dna, password)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(id, username, "Cinephile • Just Joined", "https://api.dicebear.com/7.x/avataaars/svg?seed=" + encodeURIComponent(username), JSON.stringify({}), hashedPassword);
+        user = { id, name: username };
+      } else {
+        if (!user.password) {
+          db.prepare("UPDATE users SET password = ? WHERE id = ?").run(hashedPassword, user.id);
+        } else if (user.password !== hashedPassword) {
+          return res.status(401).json({ error: "Invalid password" });
+        }
+      }
+      res.json({ id: user.id });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
   app.get("/api/movies", async (req, res) => {
-    const userId = "default-user";
+    const userId = req.headers["x-user-id"] || "default-user";
     const page = parseInt(req.query.page as string) || 1;
 
     // Load dynamic movies from TMDB
@@ -30,15 +73,16 @@ async function startServer() {
     res.json(movies);
   });
 
-  app.post("/api/swipe", (req, res) => {
+  app.post("/api/swipe", async (req, res) => {
     const { movieId, action } = req.body;
-    const userId = "default-user";
+    const userId = req.headers["x-user-id"] || "default-user";
     
     try {
       db.prepare(`
         INSERT INTO swipes (user_id, movie_id, action)
         VALUES (?, ?, ?)
       `).run(userId, movieId, action);
+      
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
@@ -46,7 +90,7 @@ async function startServer() {
   });
 
   app.get("/api/profile", (req, res) => {
-    const userId = "default-user";
+    const userId = req.headers["x-user-id"] || "default-user";
     const user = db.prepare("SELECT * FROM users WHERE id = ?").get(userId) as any;
     const history = db.prepare(`
       SELECT m.*, s.action FROM movies m
@@ -64,7 +108,7 @@ async function startServer() {
   });
 
   app.put("/api/profile", (req, res) => {
-    const userId = "default-user";
+    const userId = req.headers["x-user-id"] || "default-user";
     const { name, bio, avatar_url } = req.body;
     try {
       db.prepare(`
@@ -79,7 +123,7 @@ async function startServer() {
   });
 
   app.get("/api/conversations", (req, res) => {
-    const userId = "default-user";
+    const userId = req.headers["x-user-id"] || "default-user";
     try {
       const convos = db.prepare(`SELECT * FROM conversations WHERE user_id = ? ORDER BY updated_at DESC`).all(userId);
       res.json(convos);
@@ -90,7 +134,7 @@ async function startServer() {
 
   app.get("/api/conversations/:id", (req, res) => {
     const { id } = req.params;
-    const userId = "default-user";
+    const userId = req.headers["x-user-id"] || "default-user";
     try {
       const convo = db.prepare(`SELECT * FROM conversations WHERE id = ? AND user_id = ?`).get(id, userId);
       if (!convo) return res.status(404).json({ error: "Not found" });
@@ -103,7 +147,7 @@ async function startServer() {
 
   app.post("/api/chat", async (req, res) => {
     const { query, conversationId } = req.body;
-    const userId = "default-user";
+    const userId = req.headers["x-user-id"] || "default-user";
     
     try {
       const user = db.prepare("SELECT taste_dna FROM users WHERE id = ?").get(userId) as any;

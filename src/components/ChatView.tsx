@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, Sparkles, PlusCircle, ArrowUp, Menu, Plus, MessageSquare, X } from "lucide-react";
 import Markdown from "react-markdown";
+import { fetchWithUser } from "../lib/api";
 
 interface Message {
   role: 'user' | 'ai';
@@ -38,7 +39,7 @@ export default function ChatView() {
 
   const fetchConversations = async () => {
     try {
-      const res = await fetch('/api/conversations');
+      const res = await fetchWithUser('/api/conversations');
       if (res.ok) {
         const data = await res.json();
         setConversations(data);
@@ -50,7 +51,7 @@ export default function ChatView() {
 
   const loadConversation = async (id: string) => {
     try {
-      const res = await fetch(`/api/conversations/${id}`);
+      const res = await fetchWithUser(`/api/conversations/${id}`);
       if (res.ok) {
         const data = await res.json();
         setMessages(data.messages);
@@ -77,7 +78,7 @@ export default function ChatView() {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/chat', {
+      const res = await fetchWithUser('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: userMsg, conversationId: currentConversationId })
@@ -107,15 +108,16 @@ export default function ChatView() {
         </button>
       </div>
 
-      <div className="flex flex-col items-center justify-center text-center mt-2 mb-8 space-y-3 px-6">
-        <div className="w-16 h-16 rounded-full glass-panel flex items-center justify-center shadow-xl">
-          <Sparkles className="w-8 h-8 text-[#c9c6c5]" />
+      <div className="flex-grow overflow-y-auto space-y-6 pb-24 scrollbar-hide px-6 pt-2">
+        <div className="flex flex-col items-center justify-center text-center mt-4 mb-12 space-y-3">
+          <div className="w-16 h-16 rounded-full glass-panel flex items-center justify-center shadow-xl relative overflow-hidden group border border-white/10 bg-[#1c1b1b]">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-pink-500/20" />
+            <Sparkles className="w-8 h-8 text-purple-400 relative z-10" />
+          </div>
+          <h1 className="text-3xl font-display font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 text-transparent bg-clip-text tracking-tight">Vibe Engine</h1>
+          <p className="text-white/50 text-sm">Your personal cinematic curator.</p>
         </div>
-        <h1 className="text-3xl font-display font-bold text-white tracking-tight">Vibe Engine</h1>
-        <p className="text-white/60">Your personal cinematic curator.</p>
-      </div>
 
-      <div className="flex-grow overflow-y-auto space-y-6 pb-24 scrollbar-hide px-6">
         {messages.map((msg, i) => (
           <motion.div
             key={i}

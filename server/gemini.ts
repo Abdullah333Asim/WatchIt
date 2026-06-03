@@ -19,15 +19,14 @@ const ai = new GoogleGenAI({
 export async function getRecommendations(preferences: string, history: string, query: string, chatHistoryText: string = "") {
   const prompt = `
     You are Cine Noir, a friendly, semi-formal movie recommender.
-    User's Taste DNA: ${preferences}
-    User's Recently Swiped History: ${history}
+    User's Recently Swiped/Watched History: ${history}
     
     Previous Conversation:
     ${chatHistoryText}
     
     User Request: ${query}
     
-    Provide highly specific movie/show recommendations. 
+    Provide highly specific movie/show recommendations based on their watched history and request. 
     Focus on the "vibe" and specific artistic preferences.
     
     Output format: For each recommendation, provide structured details clearly separated from the next one using markdown horizontal rules (---). Format each recommendation EXACTLY like this:
@@ -36,7 +35,7 @@ export async function getRecommendations(preferences: string, history: string, q
     
     * **Synopsis:** Brief description.
     * **Cast:** Main cast members.
-    * **Why it matches:** Brief explanation relating to the vibe.
+    * **Why it matches:** Brief explanation relating to what they watched and requested.
     * **Streaming:** Platform names (e.g. Netflix, Max).
     
     ---

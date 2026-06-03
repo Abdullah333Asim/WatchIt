@@ -51,13 +51,26 @@ export async function loadPopularMovies(page: number = 1) {
          const year = m.release_date ? parseInt(m.release_date.split('-')[0]) : 0;
          const genres = (m.genre_ids || []).map((id: number) => GENRES[id]).filter(Boolean).join(', ');
          
+         let duration = '120m';
+         try {
+           const detailRes = await fetch(`${TMDB_BASE_URL}/movie/${m.id}?api_key=${TMDB_API_KEY}&language=en-US`);
+           if (detailRes.ok) {
+             const detailData = await detailRes.json();
+             if (detailData.runtime) {
+               duration = `${detailData.runtime}m`;
+             }
+           }
+         } catch(e) {
+           console.error("Failed to fetch movie detail", e);
+         }
+         
          try {
            insert.run({
              id: m.id.toString(),
              title: m.title,
              year,
              genre: genres || 'Unknown',
-             duration: '120m', // Popular endpoint does not return runtime
+             duration: duration,
              synopsis: m.overview || 'No synopsis available.',
              poster_url: `https://image.tmdb.org/t/p/w500${m.poster_path}`,
              rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0

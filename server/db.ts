@@ -55,6 +55,7 @@ db.exec(`
 
 try { db.exec('ALTER TABLE users ADD COLUMN bio TEXT;'); } catch (e) {}
 try { db.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT;'); } catch (e) {}
+try { db.exec('ALTER TABLE users ADD COLUMN password TEXT;'); } catch (e) {}
 
 // Make sure existing user has bio and avatar
 db.exec(`
