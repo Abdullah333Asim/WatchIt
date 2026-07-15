@@ -230,7 +230,7 @@ function Card({ movie, onSwipe, onColorExtracted, onClick }: { movie: Movie, onS
       }}
       animate={controls}
       style={{ x, y, rotate, opacity, scale }}
-      className="absolute inset-0 w-full h-full rounded-2xl overflow-hidden shadow-2xl z-10 border border-white/10 cursor-grab active:cursor-grabbing bg-[#141313] touch-none"
+      className="absolute inset-0 w-full h-full rounded-2xl overflow-hidden shadow-2xl z-10 border border-white/10 cursor-grab active:cursor-grabbing bg-[#141313] touch-none will-change-transform"
     >
       <img 
         ref={imgRef}
@@ -255,10 +255,10 @@ function Card({ movie, onSwipe, onColorExtracted, onClick }: { movie: Movie, onS
       </motion.div>
 
       {/* Card Info */}
-      <div className="absolute bottom-0 w-full p-6 glass-panel !border-0 !rounded-none">
+      <div className="absolute bottom-0 w-full p-6 bg-gradient-to-t from-[#141313] to-transparent pt-12">
         <div className="flex justify-between items-end mb-2">
           <h2 className="text-xl md:text-2xl font-display font-bold text-white leading-tight drop-shadow-lg pr-4">{movie.title}</h2>
-          <div className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-lg backdrop-blur-md shrink-0">
+          <div className="flex items-center gap-1 bg-black/40 px-2 py-1 rounded-lg shrink-0">
             <Star className="w-4 h-4 fill-[#c9c6c5] text-[#c9c6c5]" />
             <span className="text-xs font-bold">{movie.rating}</span>
           </div>

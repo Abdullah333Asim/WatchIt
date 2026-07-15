@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { User, Fingerprint, ChevronRight, Moon, Tv, Shield } from "lucide-react";
 import { fetchWithUser } from "../lib/api";
 
@@ -7,6 +7,7 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [selectedMovie, setSelectedMovie] = useState<any>(null);
   
   const [editName, setEditName] = useState("");
   const [editBio, setEditBio] = useState("");
@@ -51,6 +52,40 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
         setEditAvatar(reader.result as string);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemove = async (movieId: string) => {
+    try {
+      const res = await fetchWithUser(`/api/swipe/${movieId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setProfile((prev: any) => ({
+          ...prev,
+          history: prev.history.filter((h: any) => h.movie_id !== movieId && h.id !== movieId)
+        }));
+        setSelectedMovie(null);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleMoveToWatched = async (movieId: string) => {
+    try {
+      const res = await fetchWithUser(`/api/swipe/${movieId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'Watched' })
+      });
+      if (res.ok) {
+        setProfile((prev: any) => ({
+          ...prev,
+          history: prev.history.map((h: any) => (h.movie_id === movieId || h.id === movieId) ? { ...h, action: 'Watched' } : h)
+        }));
+        setSelectedMovie(null);
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -133,7 +168,7 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
           </div>
           <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-3 sm:gap-4">
             {profile.history.filter((h: any) => h.action === 'Watchlist').slice(0, 4).map((movie: any) => (
-              <div key={movie.id} className="group relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 shadow-xl border border-white/5">
+              <div key={movie.id} onClick={() => setSelectedMovie(movie)} className="group relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 shadow-xl border border-white/5">
                 <img src={movie.poster_url || undefined} className="w-full h-full object-cover" alt="" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
                 <div className="absolute bottom-0 left-0 w-full p-2 glass-panel !border-0 !rounded-none translate-y-2 group-hover:translate-y-0 transition-transform">
@@ -152,7 +187,7 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
           </div>
           <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-3 sm:gap-4">
             {profile.history.filter((h: any) => h.action === 'Watched').slice(0, 4).map((movie: any) => (
-              <div key={movie.id} className="group relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 shadow-xl border border-white/5">
+              <div key={movie.id} onClick={() => setSelectedMovie(movie)} className="group relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 shadow-xl border border-white/5">
                 <img src={movie.poster_url || undefined} className="w-full h-full object-cover" alt="" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
                 <div className="absolute bottom-0 left-0 w-full p-2 glass-panel !border-0 !rounded-none translate-y-2 group-hover:translate-y-0 transition-transform">
@@ -163,6 +198,56 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
           </div>
         </section>
       </div>
+
+      <AnimatePresence>
+        {selectedMovie && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" 
+            onClick={() => setSelectedMovie(null)}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#1c1b1b] border border-white/10 p-6 rounded-3xl max-w-xs w-full shadow-2xl" 
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex gap-4 mb-6">
+                <img src={selectedMovie.poster_url} className="w-16 h-24 object-cover rounded-lg shadow-md border border-white/5" />
+                <div className="flex flex-col justify-center overflow-hidden">
+                  <h3 className="text-lg font-bold text-white mb-1 leading-tight truncate">{selectedMovie.title}</h3>
+                  <p className="text-white/60 text-sm">{selectedMovie.year}</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {selectedMovie.action === 'Watchlist' && (
+                  <button 
+                    onClick={() => handleMoveToWatched(selectedMovie.id)}
+                    className="w-full py-3 bg-white text-black text-sm font-bold rounded-xl hover:bg-gray-200 transition-colors shadow-lg"
+                  >
+                    Mark as Watched
+                  </button>
+                )}
+                <button 
+                  onClick={() => handleRemove(selectedMovie.id)}
+                  className="w-full py-3 bg-red-500/10 text-red-500 text-sm font-bold rounded-xl hover:bg-red-500/20 transition-colors"
+                >
+                  Remove from {selectedMovie.action}
+                </button>
+                <button 
+                  onClick={() => setSelectedMovie(null)}
+                  className="w-full py-3 bg-transparent text-white/60 text-sm font-bold rounded-xl hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

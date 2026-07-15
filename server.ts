@@ -106,6 +106,29 @@ async function startServer() {
     }
   });
 
+  app.delete("/api/swipe/:movieId", (req, res) => {
+    const { movieId } = req.params;
+    const userId = req.headers["x-user-id"] || "default-user";
+    try {
+      db.prepare(`DELETE FROM swipes WHERE user_id = ? AND movie_id = ?`).run(userId, movieId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  app.put("/api/swipe/:movieId", (req, res) => {
+    const { movieId } = req.params;
+    const { action } = req.body;
+    const userId = req.headers["x-user-id"] || "default-user";
+    try {
+      db.prepare(`UPDATE swipes SET action = ? WHERE user_id = ? AND movie_id = ?`).run(action, userId, movieId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
   app.get("/api/profile", (req, res) => {
     const userId = req.headers["x-user-id"] || "default-user";
     const user = db.prepare("SELECT * FROM users WHERE id = ?").get(userId) as any;

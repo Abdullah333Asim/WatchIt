@@ -19,6 +19,7 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
   const [movies, setMovies] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   
   // Filters
   const [yearFilter, setYearFilter] = useState<string>('');
@@ -37,6 +38,41 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
         setLoading(false);
       });
   }, [listType]);
+
+  const handleRemove = async (movieId: string) => {
+    try {
+      const res = await fetchWithUser(`/api/swipe/${movieId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setMovies(prev => prev.filter(m => m.id !== movieId));
+        setSelectedMovie(null);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleMoveToWatched = async (movieId: string) => {
+    try {
+      const res = await fetchWithUser(`/api/swipe/${movieId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'Watched' })
+      });
+      if (res.ok) {
+        // Because we are currently viewing either Watchlist or Watched,
+        // if we are in Watchlist and move it to Watched, it should disappear from Watchlist.
+        // If we want it to just update, we could map, but it's easier to remove it from this view.
+        if (listType === 'Watchlist') {
+          setMovies(prev => prev.filter(m => m.id !== movieId));
+        } else {
+          setMovies(prev => prev.map(m => m.id === movieId ? { ...m, action: 'Watched' } : m));
+        }
+        setSelectedMovie(null);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const uniqueGenres = useMemo(() => {
     const genres = new Set<string>();
@@ -181,7 +217,8 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
-                  className="group relative aspect-[2/3] rounded-xl overflow-hidden shadow-xl border border-white/5 bg-[#1a1a1a]"
+                  className="group relative aspect-[2/3] rounded-xl overflow-hidden shadow-xl border border-white/5 bg-[#1a1a1a] cursor-pointer"
+                  onClick={() => setSelectedMovie(movie)}
                 >
                   <img src={movie.poster_url} className="w-full h-full object-cover" alt={movie.title} />
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" />
@@ -201,6 +238,56 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {selectedMovie && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" 
+            onClick={() => setSelectedMovie(null)}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#1c1b1b] border border-white/10 p-6 rounded-3xl max-w-xs w-full shadow-2xl" 
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex gap-4 mb-6">
+                <img src={selectedMovie.poster_url} className="w-16 h-24 object-cover rounded-lg shadow-md border border-white/5" />
+                <div className="flex flex-col justify-center overflow-hidden">
+                  <h3 className="text-lg font-bold text-white mb-1 leading-tight truncate">{selectedMovie.title}</h3>
+                  <p className="text-white/60 text-sm">{selectedMovie.year}</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {listType === 'Watchlist' && (
+                  <button 
+                    onClick={() => handleMoveToWatched(selectedMovie.id)}
+                    className="w-full py-3 bg-white text-black text-sm font-bold rounded-xl hover:bg-gray-200 transition-colors shadow-lg"
+                  >
+                    Mark as Watched
+                  </button>
+                )}
+                <button 
+                  onClick={() => handleRemove(selectedMovie.id)}
+                  className="w-full py-3 bg-red-500/10 text-red-500 text-sm font-bold rounded-xl hover:bg-red-500/20 transition-colors"
+                >
+                  Remove from {listType}
+                </button>
+                <button 
+                  onClick={() => setSelectedMovie(null)}
+                  className="w-full py-3 bg-transparent text-white/60 text-sm font-bold rounded-xl hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
