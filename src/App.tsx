@@ -4,13 +4,16 @@ import { useState, useEffect, ReactNode } from "react";
 import SwipeView from "./components/SwipeView";
 import ChatView from "./components/ChatView";
 import ProfileView from "./components/ProfileView";
+import MovieListView from "./components/MovieListView";
 
-type Tab = "chat" | "swipe" | "profile";
+type Tab = "chat" | "swipe" | "profile" | "movies";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("swipe");
   const [accentColor, setAccentColor] = useState("#c9c6c5");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!localStorage.getItem("userId"));
+  const [movieListType, setMovieListType] = useState<'Watched' | 'Watchlist'>('Watched');
+
 
   // Global theme update based on accent color
   useEffect(() => {
@@ -22,7 +25,8 @@ export default function App() {
     switch (activeTab) {
       case "chat": return <ChatView />;
       case "swipe": return <SwipeView onColorExtracted={setAccentColor} />;
-      case "profile": return <ProfileView />;
+      case "profile": return <ProfileView onViewList={(type) => { setMovieListType(type); setActiveTab("movies"); }} />;
+      case "movies": return <MovieListView listType={movieListType} onBack={() => setActiveTab("profile")} />;
     }
   };
 
@@ -83,7 +87,7 @@ export default function App() {
             accentColor={accentColor}
           />
           <NavItem 
-            active={activeTab === 'profile'} 
+            active={activeTab === 'profile' || activeTab === 'movies'} 
             onClick={() => setActiveTab('profile')} 
             icon={<User className="w-5 h-5 flex-shrink-0" />} 
             label="Profile"
@@ -130,6 +134,7 @@ function NavItem({ active, onClick, icon, label, accentColor }: { active: boolea
 }
 
 function LoginView({ onLogin }: { onLogin: (id: string) => void }) {
+  const [isRegister, setIsRegister] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -141,16 +146,16 @@ function LoginView({ onLogin }: { onLogin: (id: string) => void }) {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/login", {
+      const res = await fetch(isRegister ? "/api/register" : "/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: username.trim(), password })
       });
       const data = await res.json();
-      if (data.id) {
+      if (res.ok && data.id) {
         onLogin(data.id);
       } else {
-        setError(data.error || "Login failed");
+        setError(data.error || (isRegister ? "Registration failed" : "Login failed"));
       }
     } catch (err) {
       console.error(err);
@@ -161,16 +166,21 @@ function LoginView({ onLogin }: { onLogin: (id: string) => void }) {
   };
 
   return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-white font-sans selection:bg-white/10">
+    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-white font-sans selection:bg-white/10 relative overflow-hidden">
+      {/* Hidden preloader for the swipe page */}
+      <div className="hidden pointer-events-none" aria-hidden="true">
+        <SwipeView onColorExtracted={() => {}} />
+      </div>
+
       <div className="absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_center,rgba(201,198,197,0.15)_0%,transparent_100%)] pointer-events-none" />
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-sm glass-panel p-8 rounded-3xl border border-white/10 shadow-2xl relative z-10"
+        className="w-full max-w-md glass-panel p-10 rounded-3xl border border-white/10 shadow-2xl relative z-10"
       >
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-display font-bold mb-2 tracking-tight">WatchIt</h1>
-          <p className="text-white/60">Enter your credentials to continue.</p>
+        <div className="text-center mb-10">
+          <h1 className="text-5xl font-display font-bold mb-4 tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-white to-[#c9c6c5]">WatchIt</h1>
+          <p className="text-white/50 text-sm font-medium uppercase tracking-widest">{isRegister ? "Create an account" : "Welcome back"}</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-4">
@@ -179,7 +189,7 @@ function LoginView({ onLogin }: { onLogin: (id: string) => void }) {
               value={username}
               onChange={e => setUsername(e.target.value)}
               placeholder="Username" 
-              className="w-full bg-[#2b2a2a] text-white p-4 rounded-xl border border-white/10 outline-none focus:border-[#00dce5] transition-colors"
+              className="w-full bg-black/50 text-white px-5 py-4 rounded-xl border border-white/10 outline-none focus:border-[#c9c6c5] transition-all placeholder:text-white/30"
               required
             />
             <input 
@@ -187,19 +197,35 @@ function LoginView({ onLogin }: { onLogin: (id: string) => void }) {
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="Password" 
-              className="w-full bg-[#2b2a2a] text-white p-4 rounded-xl border border-white/10 outline-none focus:border-[#00dce5] transition-colors"
+              className="w-full bg-black/50 text-white px-5 py-4 rounded-xl border border-white/10 outline-none focus:border-[#c9c6c5] transition-all placeholder:text-white/30"
               required
             />
           </div>
-          {error && <p className="text-red-500 text-sm font-medium">{error}</p>}
+          {error && (
+            <motion.p 
+              initial={{ opacity: 0, height: 0 }} 
+              animate={{ opacity: 1, height: 'auto' }} 
+              className="text-red-400 text-sm font-medium text-center"
+            >
+              {error}
+            </motion.p>
+          )}
           <button 
             type="submit" 
             disabled={loading || !username.trim() || !password.trim()}
-            className="w-full bg-[#c9c6c5] text-black font-bold p-4 rounded-xl hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-white text-black font-bold py-4 rounded-xl hover:bg-[#e5e2e1] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-[0.98]"
           >
-            {loading ? "Entering..." : "Enter"}
+            {loading ? (isRegister ? "Creating..." : "Entering...") : (isRegister ? "Sign Up" : "Sign In")}
           </button>
         </form>
+        <div className="mt-8 text-center">
+          <button 
+            onClick={() => { setIsRegister(!isRegister); setError(""); }}
+            className="text-sm text-white/40 hover:text-white transition-colors"
+          >
+            {isRegister ? "Already have an account? Sign in" : "Don't have an account? Sign up"}
+          </button>
+        </div>
       </motion.div>
     </div>
   );

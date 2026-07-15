@@ -37,12 +37,7 @@ async function startServer() {
       const hashedPassword = createHash('sha256').update(password).digest('hex');
       let user = db.prepare("SELECT * FROM users WHERE name = ? COLLATE NOCASE").get(username) as any;
       if (!user) {
-        const id = randomUUID();
-        db.prepare(`
-          INSERT INTO users (id, name, bio, avatar_url, taste_dna, password)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `).run(id, username, "Cinephile • Just Joined", "https://api.dicebear.com/7.x/avataaars/svg?seed=" + encodeURIComponent(username), JSON.stringify({}), hashedPassword);
-        user = { id, name: username };
+        return res.status(401).json({ error: "User not found" });
       } else {
         if (!user.password) {
           db.prepare("UPDATE users SET password = ? WHERE id = ?").run(hashedPassword, user.id);
@@ -51,6 +46,28 @@ async function startServer() {
         }
       }
       res.json({ id: user.id });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post("/api/register", (req, res) => {
+    const { username, password } = req.body;
+    if (!username) return res.status(400).json({ error: "Username required" });
+    if (!password) return res.status(400).json({ error: "Password required" });
+    
+    try {
+      const hashedPassword = createHash('sha256').update(password).digest('hex');
+      let user = db.prepare("SELECT * FROM users WHERE name = ? COLLATE NOCASE").get(username) as any;
+      if (user) {
+        return res.status(409).json({ error: "Username already exists" });
+      }
+      const id = randomUUID();
+      db.prepare(`
+        INSERT INTO users (id, name, bio, avatar_url, taste_dna, password)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(id, username, "Cinephile • Just Joined", "https://api.dicebear.com/7.x/avataaars/svg?seed=" + encodeURIComponent(username), JSON.stringify({}), hashedPassword);
+      res.json({ id });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
@@ -97,7 +114,6 @@ async function startServer() {
       JOIN swipes s ON m.id = s.movie_id
       WHERE s.user_id = ?
       ORDER BY s.timestamp DESC
-      LIMIT 10
     `).all(userId);
     
     res.json({

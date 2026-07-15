@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { User, Fingerprint, ChevronRight, Moon, Tv, Shield } from "lucide-react";
 import { fetchWithUser } from "../lib/api";
 
-export default function ProfileView() {
+export default function ProfileView({ onViewList }: { onViewList: (type: 'Watched' | 'Watchlist') => void }) {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -129,7 +129,7 @@ export default function ProfileView() {
         <section className="md:col-span-12 space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-display font-bold text-[#c9c6c5]">My Watchlist</h2>
-            <button className="text-sm font-bold text-[#c9c6c5] hover:underline">View All</button>
+            <button onClick={() => onViewList('Watchlist')} className="text-sm font-bold text-[#c9c6c5] hover:underline">View All</button>
           </div>
           <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {profile.history.filter((h: any) => h.action === 'Watchlist').slice(0, 5).map((movie: any) => (
@@ -148,7 +148,7 @@ export default function ProfileView() {
         <section className="md:col-span-7 space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-display font-bold text-[#c9c6c5]">Watched</h2>
-            <button className="text-sm font-bold text-[#c9c6c5] hover:underline">View All</button>
+            <button onClick={() => onViewList('Watched')} className="text-sm font-bold text-[#c9c6c5] hover:underline">View All</button>
           </div>
           <div className="grid grid-cols-2 gap-4">
             {profile.history.filter((h: any) => h.action === 'Watched').slice(0, 4).map((movie: any) => (
