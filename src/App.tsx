@@ -13,7 +13,7 @@ export default function App() {
   const [accentColor, setAccentColor] = useState("#c9c6c5");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!localStorage.getItem("userId"));
   const [movieListType, setMovieListType] = useState<'Watched' | 'Watchlist'>('Watched');
-
+  const [isChatSidebarOpen, setIsChatSidebarOpen] = useState(false);
 
   // Global theme update based on accent color
   useEffect(() => {
@@ -23,7 +23,7 @@ export default function App() {
   const renderContent = () => {
     if (!isAuthenticated) return <LoginView onLogin={(id) => { localStorage.setItem("userId", id); setIsAuthenticated(true); }} />;
     switch (activeTab) {
-      case "chat": return <ChatView />;
+      case "chat": return <ChatView onSidebarToggle={setIsChatSidebarOpen} />;
       case "swipe": return <SwipeView onColorExtracted={setAccentColor} />;
       case "profile": return <ProfileView onViewList={(type) => { setMovieListType(type); setActiveTab("movies"); }} />;
       case "movies": return <MovieListView listType={movieListType} onBack={() => setActiveTab("profile")} />;
@@ -50,8 +50,8 @@ export default function App() {
         }}
       />
 
-      <header id="main-header" className={`${activeTab === 'profile' ? 'absolute' : 'fixed'} top-0 w-full bg-[#141313]/80 backdrop-blur-3xl border-b border-white/10 flex justify-center items-center px-6 h-16 z-50`}>
-        <div className="font-bold text-2xl tracking-tighter text-[#c9c6c5] font-display">WatchIt</div>
+      <header id="main-header" className={`${activeTab === 'profile' ? 'absolute' : 'fixed'} top-0 w-full bg-transparent flex justify-center items-center px-6 h-16 z-50 pointer-events-none transition-opacity duration-300 ${isChatSidebarOpen ? 'opacity-0' : 'opacity-100'}`}>
+        <div className="font-bold text-2xl tracking-tighter text-white drop-shadow-lg font-display">WatchIt</div>
       </header>
 
       <main className="pt-16 pb-24 md:pb-0 md:pt-16 min-h-screen relative z-10">
@@ -70,28 +70,25 @@ export default function App() {
       </main>
 
       {/* Bottom Nav */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-        <nav id="bottom-nav" className="flex items-center gap-2 p-2 bg-[#1c1b1b]/90 backdrop-blur-3xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] rounded-full">
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
+        <nav id="bottom-nav" className="flex items-center gap-1 p-1.5 bg-[#1c1b1b]/90 backdrop-blur-3xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] rounded-full">
           <NavItem 
             active={activeTab === 'chat'} 
             onClick={() => setActiveTab('chat')} 
-            icon={<MessageSquare className="w-5 h-5 flex-shrink-0" />} 
+            icon={<MessageSquare className="w-[18px] h-[18px] flex-shrink-0" />} 
             label="Chat"
-            accentColor={accentColor}
           />
           <NavItem 
             active={activeTab === 'swipe'} 
             onClick={() => setActiveTab('swipe')} 
-            icon={<LayoutGrid className="w-5 h-5 flex-shrink-0" />} 
+            icon={<LayoutGrid className="w-[18px] h-[18px] flex-shrink-0" />} 
             label="Swipe"
-            accentColor={accentColor}
           />
           <NavItem 
             active={activeTab === 'profile' || activeTab === 'movies'} 
             onClick={() => setActiveTab('profile')} 
-            icon={<User className="w-5 h-5 flex-shrink-0" />} 
+            icon={<User className="w-[18px] h-[18px] flex-shrink-0" />} 
             label="Profile"
-            accentColor={accentColor}
           />
         </nav>
       </div>
@@ -99,12 +96,11 @@ export default function App() {
   );
 }
 
-function NavItem({ active, onClick, icon, label, accentColor }: { active: boolean, onClick: () => void, icon: ReactNode, label: string, accentColor: string }) {
+function NavItem({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: ReactNode, label: string }) {
   return (
     <button 
       onClick={onClick}
-      className={`relative flex items-center justify-center transition-all duration-300 rounded-full px-5 py-3 overflow-hidden ${active ? 'bg-white/10' : 'hover:bg-white/5 opacity-60 hover:opacity-100'}`}
-      style={{ color: active ? accentColor : undefined }}
+      className={`relative flex items-center justify-center transition-all duration-300 rounded-full px-4 py-2.5 overflow-hidden ${active ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
     >
       <div className={`relative z-10 flex items-center justify-center gap-2 transition-all duration-300 ${active ? 'drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]' : ''}`}>
         {icon}
@@ -115,7 +111,7 @@ function NavItem({ active, onClick, icon, label, accentColor }: { active: boolea
               animate={{ opacity: 1, width: "auto", scale: 1 }}
               exit={{ opacity: 0, width: 0, scale: 0.8 }}
               transition={{ duration: 0.2 }}
-              className="text-sm font-bold tracking-wide whitespace-nowrap"
+              className="text-xs font-bold tracking-wide whitespace-nowrap"
             >
               {label}
             </motion.span>

@@ -15,16 +15,18 @@ interface Conversation {
   updated_at: string;
 }
 
-export default function ChatView() {
-  const [messages, setMessages] = useState<Message[]>([
-    { role: 'ai', content: "Ah, welcome to the lobby. Tell me, what kind of cinematic journey are you seeking today? Give me a vibe, a feeling, or even a rainy day mood." }
-  ]);
+export default function ChatView({ onSidebarToggle }: { onSidebarToggle?: (isOpen: boolean) => void }) {
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
+  useEffect(() => {
+    onSidebarToggle?.(isSidebarOpen);
+  }, [isSidebarOpen, onSidebarToggle]);
+
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -65,7 +67,7 @@ export default function ChatView() {
 
   const startNewChat = () => {
     setCurrentConversationId(null);
-    setMessages([{ role: 'ai', content: "Ah, welcome to the lobby. Tell me, what kind of cinematic journey are you seeking today? Give me a vibe, a feeling, or even a rainy day mood." }]);
+    setMessages([]);
     setIsSidebarOpen(false);
   };
 
@@ -108,46 +110,47 @@ export default function ChatView() {
         </button>
       </div>
 
-      <div className="flex-grow overflow-y-auto space-y-6 pb-24 scrollbar-hide px-6 pt-2">
-        <div className="flex flex-col items-center justify-center text-center mt-4 mb-12 space-y-3">
-          <div className="w-16 h-16 rounded-full glass-panel flex items-center justify-center shadow-xl relative overflow-hidden group border border-white/10 bg-[#1c1b1b]">
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-pink-500/20" />
-            <Sparkles className="w-8 h-8 text-purple-400 relative z-10" />
+      <div className={`flex-grow overflow-y-auto pb-24 scrollbar-hide px-6 ${messages.length === 0 ? 'flex flex-col items-center justify-center -mt-16' : 'pt-4 space-y-6'}`}>
+        {messages.length === 0 ? (
+          <div className="flex flex-col items-center text-center">
+            <h1 className="text-2xl md:text-3xl font-sans font-normal text-[#c9c6c5] tracking-tight mb-2 shadow-sm drop-shadow">
+              What are we watching today?
+            </h1>
           </div>
-          <h1 className="text-3xl font-display font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 text-transparent bg-clip-text tracking-tight">Vibe Engine</h1>
-          <p className="text-white/50 text-sm">Your personal cinematic curator.</p>
-        </div>
-
-        {messages.map((msg, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div className={`max-w-[85%] md:max-w-[75%] p-4 rounded-2xl ${
-              msg.role === 'user' 
-                ? 'bg-[#2b2a2a] text-white rounded-br-sm shadow-xl' 
-                : 'glass-panel text-[#e5e2e1] rounded-bl-sm border-white/10'
-            }`}>
-              <div className="markdown-body">
-                <Markdown>{msg.content}</Markdown>
-              </div>
-            </div>
-          </motion.div>
-        ))}
-        {loading && (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            className="flex justify-start"
-          >
-            <div className="glass-panel p-4 rounded-2xl rounded-bl-sm border-white/10 flex gap-2">
-              <span className="w-2 h-2 bg-[#c9c6c5] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-2 h-2 bg-[#c9c6c5] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <span className="w-2 h-2 bg-[#c9c6c5] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-            </div>
-          </motion.div>
+        ) : (
+          <>
+            {messages.map((msg, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div className={`max-w-[85%] md:max-w-[75%] p-4 rounded-2xl ${
+                  msg.role === 'user' 
+                    ? 'bg-[#2b2a2a] text-white rounded-br-sm shadow-xl' 
+                    : 'glass-panel text-[#e5e2e1] rounded-bl-sm border-white/10'
+                }`}>
+                  <div className="markdown-body">
+                    <Markdown>{msg.content}</Markdown>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+            {loading && (
+              <motion.div 
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1 }} 
+                className="flex justify-start"
+              >
+                <div className="glass-panel p-4 rounded-2xl rounded-bl-sm border-white/10 flex gap-2">
+                  <span className="w-2 h-2 bg-[#c9c6c5] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-2 h-2 bg-[#c9c6c5] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-2 h-2 bg-[#c9c6c5] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              </motion.div>
+            )}
+          </>
         )}
         <div ref={chatEndRef} />
       </div>
@@ -155,22 +158,23 @@ export default function ChatView() {
       {/* Floating Input */}
       <div className="fixed bottom-24 left-0 w-full px-6 flex justify-center z-40 block">
         <div className="w-full max-w-2xl relative">
-          <div className="glass-panel rounded-full p-1 flex items-center border border-white/10 focus-within:border-white/30 transition-all shadow-2xl">
-            <button className="p-3 text-white/40 hover:text-[#c9c6c5] transition-colors rounded-full">
-              <PlusCircle className="w-6 h-6" />
-            </button>
+          <div className="bg-[#1a1a1a]/80 backdrop-blur-3xl rounded-full p-1.5 pl-4 flex items-center border border-white/10 focus-within:border-white/30 focus-within:bg-[#2b2a2a]/90 transition-all shadow-2xl">
             <input 
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSend()}
-              className="flex-grow bg-transparent border-none text-white placeholder:text-white/20 focus:ring-0 px-2 h-12 outline-none" 
-              placeholder="Tell me what you're feeling..." 
+              className="flex-grow bg-transparent border-none text-white placeholder:text-white/40 focus:ring-0 px-2 h-10 outline-none text-base" 
+              placeholder="Ask WatchIt" 
               type="text"
             />
             <button 
               onClick={handleSend}
               disabled={!input.trim() || loading}
-              className="bg-[#2b2a2a] text-white p-3 rounded-full w-10 h-10 flex items-center justify-center mr-1 hover:bg-[#3b3a3a] disabled:opacity-50 transition-all"
+              className={`p-2 rounded-full w-10 h-10 flex items-center justify-center mr-0.5 transition-all ${
+                input.trim() && !loading 
+                  ? 'bg-white text-black hover:bg-gray-200 shadow-lg' 
+                  : 'bg-[#2b2a2a] text-white/30'
+              }`}
             >
               <ArrowUp className="w-5 h-5" />
             </button>
@@ -194,32 +198,32 @@ export default function ChatView() {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="fixed top-0 left-0 w-72 h-full bg-[#141313]/95 backdrop-blur-3xl border-r border-white/10 z-[65] shadow-2xl flex flex-col p-6"
+              className="fixed top-0 left-0 w-72 h-full bg-[#111111] border-r border-white/5 z-[65] shadow-2xl flex flex-col p-4"
             >
-              <div className="flex justify-between items-center mb-8 shrink-0">
-                <h2 className="text-xl font-display font-bold text-white">History</h2>
-                <button onClick={() => setIsSidebarOpen(false)} className="text-white/40 hover:text-white transition-colors">
-                  <X className="w-6 h-6" />
+              <div className="flex items-center mb-6 shrink-0 pt-2">
+                <button onClick={() => setIsSidebarOpen(false)} className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-full transition-colors">
+                  <Menu className="w-5 h-5" />
                 </button>
               </div>
               
-              <button onClick={startNewChat} className="flex shrink-0 items-center gap-3 w-full text-left p-3 rounded-xl bg-[#c9c6c5] text-[#141313] font-semibold mb-6 shadow-lg hover:bg-white transition-colors">
-                 <Plus className="w-5 h-5" /> New Chat
+              <button onClick={startNewChat} className="flex shrink-0 items-center gap-3 w-fit text-left px-4 py-2.5 rounded-full bg-[#222] hover:bg-[#333] text-white text-sm font-medium mb-8 transition-colors">
+                 <Plus className="w-4 h-4" /> New chat
               </button>
 
-              <div className="flex-1 overflow-y-auto space-y-2 scrollbar-hide pb-20">
+              <div className="flex-1 overflow-y-auto space-y-1 scrollbar-hide pb-20">
+                 <div className="text-xs font-semibold text-white/40 mb-3 px-4">Recent</div>
                  {conversations.map(c => (
                    <button 
                       key={c.id} 
                       onClick={() => loadConversation(c.id)} 
-                      className={`w-full text-left p-3 rounded-xl flex border border-white/5 items-center gap-3 hover:bg-white/10 transition-colors ${c.id === currentConversationId ? 'bg-white/10 text-white' : 'text-white/60'}`}
+                      className={`w-full text-left px-4 py-2.5 rounded-full flex items-center gap-3 transition-colors ${c.id === currentConversationId ? 'bg-[#2b2a2a] text-white' : 'text-white/70 hover:bg-white/5 hover:text-white'}`}
                    >
-                      <MessageSquare className="w-4 h-4 shrink-0" />
-                      <span className="text-sm font-medium truncate">{c.title}</span>
+                      <MessageSquare className="w-4 h-4 shrink-0 opacity-70" />
+                      <span className="text-sm font-normal truncate">{c.title}</span>
                    </button>
                  ))}
                  {conversations.length === 0 && (
-                    <p className="text-sm text-white/40 text-center mt-10">No past conversations.</p>
+                    <p className="text-sm text-white/40 px-4 mt-2">No recent chats.</p>
                  )}
               </div>
             </motion.div>

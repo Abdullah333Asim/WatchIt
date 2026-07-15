@@ -84,7 +84,7 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
         <ArrowUp className="w-4 h-4 animate-bounce" />
         <span>Swipe up to add to watchlist</span>
       </div>
-      <div className="relative w-full h-[530px] flex items-center justify-center perspective-1000">
+      <div className="relative w-full flex-1 min-h-0 flex items-center justify-center perspective-1000 mb-4">
         {/* Next Card (Background) */}
         {nextMovie && (
           <div className="absolute inset-0 w-full h-full rounded-2xl overflow-hidden shadow-2xl transform scale-95 translate-y-4 opacity-50 z-0 border border-white/5 bg-[#2b2a2a]">
@@ -104,7 +104,7 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
       </div>
 
       {/* Swipe Instructions */}
-      <div className="w-full flex justify-between items-start px-4 py-8 text-white/50 text-[10px] sm:text-xs font-bold tracking-wider">
+      <div className="w-full flex justify-between items-start px-4 py-2 text-white/50 text-[10px] sm:text-xs font-bold tracking-wider">
         <div className="flex flex-col items-center gap-1 w-24 text-center animate-pulse">
           <ArrowLeft className="w-5 h-5 sm:w-6 sm:h-6 mb-1 animate-bounce" />
           <span>HAVEN'T<br/>WATCHED</span>
@@ -257,8 +257,8 @@ function Card({ movie, onSwipe, onColorExtracted, onClick }: { movie: Movie, onS
       {/* Card Info */}
       <div className="absolute bottom-0 w-full p-6 glass-panel !border-0 !rounded-none">
         <div className="flex justify-between items-end mb-2">
-          <h2 className="text-3xl font-display font-bold text-white leading-tight drop-shadow-lg">{movie.title}</h2>
-          <div className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-lg backdrop-blur-md">
+          <h2 className="text-xl md:text-2xl font-display font-bold text-white leading-tight drop-shadow-lg pr-4">{movie.title}</h2>
+          <div className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-lg backdrop-blur-md shrink-0">
             <Star className="w-4 h-4 fill-[#c9c6c5] text-[#c9c6c5]" />
             <span className="text-xs font-bold">{movie.rating}</span>
           </div>
