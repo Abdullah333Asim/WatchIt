@@ -1,5 +1,6 @@
 export async function fetchWithUser(url: string, options: RequestInit = {}) {
-  const userId = localStorage.getItem("userId") || "";
+  let userId = localStorage.getItem("userId") || "";
+  if (userId === "undefined" || userId === "null") userId = "";
   const headers = {
     ...options.headers,
     ...(userId ? { "X-User-Id": userId } : {})

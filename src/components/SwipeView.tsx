@@ -20,6 +20,26 @@ let cachedCurrentIndex: number = 0;
 let cachedPage: number = 1;
 let initialFetched: boolean = false;
 
+export const preloadMovies = async () => {
+  if (initialFetched) return;
+  try {
+    const res = await fetchWithUser(`/api/movies?page=${cachedPage}`);
+    const data = await res.json();
+    const existingIds = new Set(cachedMovies.map(m => m.id));
+    const newMovies = [];
+    for (const m of data) {
+      if (!existingIds.has(m.id)) {
+        newMovies.push(m);
+        existingIds.add(m.id);
+      }
+    }
+    cachedMovies = [...cachedMovies, ...newMovies];
+    initialFetched = true;
+  } catch (err) {
+    console.error(err);
+  }
+};
+
 export default function SwipeView({ onColorExtracted }: { onColorExtracted: (color: string) => void }) {
   const [movies, setMovies] = useState<Movie[]>(cachedMovies);
   const [currentIndex, setCurrentIndex] = useState(cachedCurrentIndex);

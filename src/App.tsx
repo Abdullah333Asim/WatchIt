@@ -11,7 +11,7 @@ type Tab = "chat" | "swipe" | "profile" | "movies";
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("swipe");
   const [accentColor, setAccentColor] = useState("#c9c6c5");
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!localStorage.getItem("userId"));
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => { const id = localStorage.getItem("userId"); return !!id && id !== "undefined" && id !== "null"; });
   const [movieListType, setMovieListType] = useState<'Watched' | 'Watchlist'>('Watched');
   const [isChatSidebarOpen, setIsChatSidebarOpen] = useState(false);
 
@@ -130,6 +130,11 @@ function NavItem({ active, onClick, icon, label }: { active: boolean, onClick: (
 }
 
 function LoginView({ onLogin }: { onLogin: (id: string) => void }) {
+  useEffect(() => {
+    import('./components/SwipeView').then(mod => {
+      if (mod.preloadMovies) mod.preloadMovies();
+    });
+  }, []);
   const [isRegister, setIsRegister] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -163,10 +168,8 @@ function LoginView({ onLogin }: { onLogin: (id: string) => void }) {
 
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-white font-sans selection:bg-white/10 relative overflow-hidden">
-      {/* Hidden preloader for the swipe page */}
-      <div className="hidden pointer-events-none" aria-hidden="true">
-        <SwipeView onColorExtracted={() => {}} />
-      </div>
+      {/* Background preloader for SwipeView */}
+      <div className="hidden" aria-hidden="true"></div>
 
       <div className="absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_center,rgba(201,198,197,0.15)_0%,transparent_100%)] pointer-events-none" />
       <motion.div 
