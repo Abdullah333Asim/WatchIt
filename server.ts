@@ -4,7 +4,7 @@ import { createServer as createViteServer } from "vite";
 import db from "./server/db.ts";
 import { getRecommendations } from "./server/gemini.ts";
 import { randomUUID, createHash } from "crypto";
-import { loadPopularMovies } from "./server/tmdb.ts";
+import { loadPopularMovies, searchMovieAndSave } from "./server/tmdb.ts";
 
 async function startServer() {
   const app = express();
@@ -22,7 +22,7 @@ async function startServer() {
         db.prepare(`
           INSERT OR IGNORE INTO users (id, name, bio, avatar_url, taste_dna)
           VALUES (?, ?, ?, ?, ?)
-        `).run(userId, "Anonymous Cinephile", "Just Joined", "https://api.dicebear.com/7.x/avataaars/svg?seed=" + userId, JSON.stringify({}));
+        `).run(userId, "Anonymous Cinephile", "Cinephile", "https://api.dicebear.com/7.x/avataaars/svg?seed=" + userId, JSON.stringify({}));
       }
     }
     next();
@@ -66,7 +66,7 @@ async function startServer() {
       db.prepare(`
         INSERT INTO users (id, name, bio, avatar_url, taste_dna, password)
         VALUES (?, ?, ?, ?, ?, ?)
-      `).run(id, username, "Cinephile • Just Joined", "https://api.dicebear.com/7.x/avataaars/svg?seed=" + encodeURIComponent(username), JSON.stringify({}), hashedPassword);
+      `).run(id, username, "Cinephile", "https://api.dicebear.com/7.x/avataaars/svg?seed=" + encodeURIComponent(username), JSON.stringify({}), hashedPassword);
       res.json({ id });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
@@ -95,6 +95,10 @@ async function startServer() {
     const userId = req.headers["x-user-id"] || "default-user";
     
     try {
+      db.prepare(`
+        DELETE FROM swipes WHERE user_id = ? AND movie_id = ?
+      `).run(userId, movieId);
+      
       db.prepare(`
         INSERT INTO swipes (user_id, movie_id, action)
         VALUES (?, ?, ?)
@@ -136,7 +140,8 @@ async function startServer() {
       SELECT m.*, s.action FROM movies m
       JOIN swipes s ON m.id = s.movie_id
       WHERE s.user_id = ?
-      ORDER BY s.timestamp DESC
+      GROUP BY m.id
+      ORDER BY MAX(s.timestamp) DESC
     `).all(userId);
     
     res.json({
@@ -194,9 +199,10 @@ async function startServer() {
         SELECT m.title, s.action FROM movies m
         JOIN swipes s ON m.id = s.movie_id
         WHERE s.user_id = ?
+        ORDER BY s.timestamp DESC
       `).all(userId) as any[];
       
-      const historyStr = history.map(h => `${h.title} (${h.action})`).join(", ");
+      const historyStr = history.slice(0, 20).map(h => `${h.title} (${h.action})`).join(", ");
       
       let convId = conversationId;
       if (!convId) {
@@ -209,10 +215,29 @@ async function startServer() {
 
       db.prepare(`INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, ?, ?)`).run(randomUUID(), convId, 'user', query);
 
-      const chatHistory = db.prepare(`SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC LIMIT 20`).all(convId) as any[];
+      const chatHistory = db.prepare(`SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC LIMIT 10`).all(convId) as any[];
       const chatHistoryStr = chatHistory.map(m => `${m.role === 'user' ? 'User' : 'Cine Noir'}: ${m.content}`).join('\n\n');
 
-      const response = await getRecommendations(user.taste_dna, historyStr, query, chatHistoryStr);
+      let response = await getRecommendations(user.taste_dna, historyStr, query, chatHistoryStr);
+      
+      try {
+        const parsed = JSON.parse(response);
+        if (parsed.recommendations && Array.isArray(parsed.recommendations)) {
+          for (let rec of parsed.recommendations) {
+            let m = db.prepare('SELECT id, poster_url FROM movies WHERE title = ? COLLATE NOCASE').get(rec.title) as any;
+            if (!m) {
+              m = await searchMovieAndSave(rec.title, rec.year);
+            }
+            if (m) {
+              rec.movie_id = m.id;
+              rec.poster_url = m.poster_url;
+            }
+          }
+          response = JSON.stringify(parsed);
+        }
+      } catch (e) {
+        console.error("Failed to parse recommendations", e);
+      }
       
       db.prepare(`INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, ?, ?)`).run(randomUUID(), convId, 'ai', response);
 

@@ -15,11 +15,16 @@ interface Movie {
   rating: number;
 }
 
+let cachedMovies: Movie[] = [];
+let cachedCurrentIndex: number = 0;
+let cachedPage: number = 1;
+let initialFetched: boolean = false;
+
 export default function SwipeView({ onColorExtracted }: { onColorExtracted: (color: string) => void }) {
-  const [movies, setMovies] = useState<Movie[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
+  const [movies, setMovies] = useState<Movie[]>(cachedMovies);
+  const [currentIndex, setCurrentIndex] = useState(cachedCurrentIndex);
+  const [loading, setLoading] = useState(!initialFetched);
+  const [page, setPage] = useState(cachedPage);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   
   const movie = movies[currentIndex];
@@ -32,14 +37,34 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
       .then(data => {
         setMovies(prev => {
           const existingIds = new Set(prev.map(m => m.id));
-          const newMovies = data.filter((m: Movie) => !existingIds.has(m.id));
-          return [...prev, ...newMovies];
+          const newMovies: Movie[] = [];
+          for (const m of data) {
+            if (!existingIds.has(m.id)) {
+              newMovies.push(m);
+              existingIds.add(m.id);
+            }
+          }
+          const updatedMovies = [...prev, ...newMovies];
+          cachedMovies = updatedMovies;
+          return updatedMovies;
         });
         setLoading(false);
+        initialFetched = true;
       });
   };
 
+  const lastFetchedPage = useRef(initialFetched ? cachedPage : 0);
+
   useEffect(() => {
+    cachedCurrentIndex = currentIndex;
+  }, [currentIndex]);
+
+  useEffect(() => {
+    cachedPage = page;
+    if (page === lastFetchedPage.current) {
+      return;
+    }
+    lastFetchedPage.current = page;
     fetchMovies(page);
   }, [page]);
 
@@ -74,7 +99,7 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
   if (!movie) return (
     <div className="flex flex-col items-center justify-center h-[calc(100vh-160px)] px-6 text-center">
       <h2 className="text-2xl font-display font-bold mb-2">That's a wrap!</h2>
-      <p className="text-white/60">You've swiped through all our picks. Check back later or use the Vibe Engine for more.</p>
+      <p className="text-white/60">Loading more movies... please wait or head to the chat tab.</p>
     </div>
   );
 

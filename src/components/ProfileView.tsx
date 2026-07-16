@@ -103,13 +103,10 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
           />
           {isEditing && (
             <div 
-              className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+              className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={() => fileInputRef.current?.click()}
             >
-              <div className="bg-white/20 p-1.5 rounded-full mb-1 border border-white/20 text-white shadow-lg backdrop-blur-sm">
-                <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-              </div>
-              <span className="text-[9px] font-bold tracking-wider text-white">UPLOAD</span>
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
             </div>
           )}
           <input 
@@ -122,18 +119,18 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
         </div>
         <div className="text-center md:text-left flex-1 w-full">
           {isEditing ? (
-            <div className="space-y-4 mb-4">
+            <div className="space-y-2 mb-4">
               <input 
                 value={editName}
                 onChange={e => setEditName(e.target.value)}
-                className="w-full bg-[#2b2a2a] text-[#c9c6c5] p-3 text-sm rounded-xl border border-white/10 outline-none focus:border-[#00dce5]"
-                placeholder="Your Name"
+                className="w-full bg-transparent text-2xl md:text-3xl font-display font-bold text-[#c9c6c5] border-b border-white/20 outline-none focus:border-white transition-colors pb-1 placeholder:text-white/20"
+                placeholder="Name"
               />
-              <textarea 
+              <input 
                 value={editBio}
                 onChange={e => setEditBio(e.target.value)}
-                className="w-full bg-[#2b2a2a] text-white/60 p-3 text-sm rounded-xl border border-white/10 outline-none focus:border-[#00dce5] h-20 resize-none font-sans"
-                placeholder="Say something about yourself..."
+                className="w-full bg-transparent text-white/60 text-sm border-b border-white/20 outline-none focus:border-white transition-colors pb-1 placeholder:text-white/20"
+                placeholder="Bio"
               />
             </div>
           ) : (
@@ -143,16 +140,16 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
             </>
           )}
 
-          <div className="flex flex-wrap justify-center md:justify-start gap-2">
+          <div className="flex flex-wrap justify-center md:justify-start gap-4">
             {isEditing ? (
               <>
-                <button onClick={handleSave} className="bg-[#00dce5] text-[#002021] text-sm px-5 py-2 rounded-lg font-bold hover:bg-[#63f7ff] transition-colors shadow-lg">Save Profile</button>
-                <button onClick={() => setIsEditing(false)} className="glass-panel text-white/60 text-sm px-5 py-2 rounded-lg font-medium border border-white/5 hover:text-white transition-colors">Cancel</button>
+                <button onClick={handleSave} className="text-white text-sm font-semibold hover:text-[#c9c6c5] transition-colors">Save</button>
+                <button onClick={() => setIsEditing(false)} className="text-white/40 text-sm font-medium hover:text-white transition-colors">Cancel</button>
               </>
             ) : (
               <>
-                <button onClick={() => setIsEditing(true)} className="bg-[#c9c6c5] text-[#1c1b1b] text-sm px-5 py-2 rounded-lg font-medium hover:bg-[#b0aeac] transition-colors shadow-lg">Edit Profile</button>
-                <button onClick={() => { localStorage.removeItem("userId"); window.location.reload(); }} className="glass-panel text-white/60 text-sm px-5 py-2 rounded-lg font-medium border border-white/5 hover:text-white hover:bg-red-500/10 transition-colors">Log Out</button>
+                <button onClick={() => setIsEditing(true)} className="text-white text-sm font-semibold hover:text-[#c9c6c5] transition-colors">Edit</button>
+                <button onClick={() => { localStorage.removeItem("userId"); window.location.reload(); }} className="text-white/40 text-sm font-medium hover:text-red-400 transition-colors">Log Out</button>
               </>
             )}
           </div>

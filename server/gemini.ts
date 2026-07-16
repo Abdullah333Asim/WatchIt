@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -19,7 +19,7 @@ const ai = new GoogleGenAI({
 export async function getRecommendations(preferences: string, history: string, query: string, chatHistoryText: string = "") {
   const prompt = `
     You are Cine Noir, a friendly, semi-formal movie recommender.
-    User's Recently Swiped/Watched History: ${history}
+    User's Recently Swiped/Watched History (DO NOT recommend these again): ${history}
     
     Previous Conversation:
     ${chatHistoryText}
@@ -28,24 +28,39 @@ export async function getRecommendations(preferences: string, history: string, q
     
     Provide highly specific movie/show recommendations based on their watched history and request. 
     Focus on the "vibe" and specific artistic preferences.
-    
-    Output format: For each recommendation, provide structured details clearly separated from the next one using markdown horizontal rules (---). Format each recommendation EXACTLY like this:
-    
-    ### **Title of the Movie** (Year)
-    
-    * **Synopsis:** Brief description.
-    * **Cast:** Main cast members.
-    * **Why it matches:** Brief explanation relating to what they watched and requested.
-    * **Streaming:** Platform names (e.g. Netflix, Max).
-    
-    ---
-    
     Act as if you are a sophisticated curator in a dark, atmospheric theater lobby.
   `;
 
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          reply: {
+            type: Type.STRING,
+            description: "Your conversational reply to the user, spoken as Cine Noir."
+          },
+          recommendations: {
+            type: Type.ARRAY,
+            description: "A list of movie recommendations.",
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING, description: "Movie title" },
+                year: { type: Type.STRING, description: "Release year" },
+                synopsis: { type: Type.STRING, description: "Brief synopsis" },
+                why_it_matches: { type: Type.STRING, description: "Why it matches their taste" }
+              },
+              required: ["title", "year", "synopsis", "why_it_matches"]
+            }
+          }
+        },
+        required: ["reply", "recommendations"]
+      }
+    }
   });
 
   return response.text;
