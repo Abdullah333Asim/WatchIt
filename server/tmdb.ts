@@ -1,4 +1,6 @@
-import db from "./db.ts";
+import { db } from "../src/db/index.ts";
+import { movies } from "../src/db/schema.ts";
+import { sql } from "drizzle-orm";
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 
@@ -38,12 +40,6 @@ export async function loadPopularMovies(page: number = 1) {
     const data = await res.json();
     
     if (data.results && Array.isArray(data.results)) {
-       const insert = db.prepare(`
-        INSERT INTO movies (id, title, year, genre, duration, synopsis, poster_url, rating)
-        VALUES (@id, @title, @year, @genre, @duration, @synopsis, @poster_url, @rating)
-        ON CONFLICT(id) DO NOTHING
-       `);
-       
        for (const m of data.results) {
          if (!m.poster_path) continue;
          const year = m.release_date ? parseInt(m.release_date.split('-')[0]) : 0;
@@ -63,16 +59,16 @@ export async function loadPopularMovies(page: number = 1) {
          }
          
          try {
-           insert.run({
+           await db.insert(movies).values({
              id: m.id.toString(),
              title: m.title,
              year,
              genre: genres || 'Unknown',
              duration: duration,
              synopsis: m.overview || 'No synopsis available.',
-             poster_url: `https://image.tmdb.org/t/p/w500${m.poster_path}`,
+             posterUrl: `https://image.tmdb.org/t/p/w500${m.poster_path}`,
              rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0
-           });
+           }).onConflictDoNothing();
          } catch (e) {
          }
        }
@@ -109,22 +105,17 @@ export async function searchMovieAndSave(title: string, yearStr?: string) {
       
       const poster_url = m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null;
       
-      const insert = db.prepare(`
-        INSERT INTO movies (id, title, year, genre, duration, synopsis, poster_url, rating)
-        VALUES (@id, @title, @year, @genre, @duration, @synopsis, @poster_url, @rating)
-        ON CONFLICT(id) DO NOTHING
-      `);
       try {
-        insert.run({
+        await db.insert(movies).values({
           id: m.id.toString(),
           title: m.title,
           year,
           genre: genres || 'Unknown',
           duration,
           synopsis: m.overview || 'No synopsis available.',
-          poster_url,
+          posterUrl: poster_url,
           rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0
-        });
+        }).onConflictDoNothing();
       } catch (e) {}
       
       return { id: m.id.toString(), poster_url };

@@ -25,6 +25,7 @@ export const preloadMovies = async () => {
   try {
     const res = await fetchWithUser(`/api/movies?page=${cachedPage}`);
     const data = await res.json();
+    if (!Array.isArray(data)) return;
     const existingIds = new Set(cachedMovies.map(m => m.id));
     const newMovies = [];
     for (const m of data) {
@@ -55,6 +56,7 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
     fetchWithUser(`/api/movies?page=${pageNum}`)
       .then(res => res.json())
       .then(data => {
+        if (!Array.isArray(data)) return;
         setMovies(prev => {
           const existingIds = new Set(prev.map(m => m.id));
           const newMovies: Movie[] = [];
@@ -417,11 +419,11 @@ function MovieReviews({ movieId }: { movieId: string }) {
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
-    fetch(`/api/movies/${movieId}/reviews`)
+    fetchWithUser(`/api/movies/${movieId}/reviews`)
       .then(res => res.json())
       .then(data => {
         if (isMounted) {
-          setReviews(data || []);
+          setReviews(Array.isArray(data) ? data : []);
           setLoading(false);
         }
       })

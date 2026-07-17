@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { User, Fingerprint, ChevronRight, Moon, Tv, Shield } from "lucide-react";
 import { fetchWithUser } from "../lib/api";
+import { logout } from "../lib/firebase.ts";
 
 export default function ProfileView({ onViewList }: { onViewList: (type: 'Watched' | 'Watchlist') => void }) {
   const [profile, setProfile] = useState<any>(null);
@@ -149,7 +150,7 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
             ) : (
               <>
                 <button onClick={() => setIsEditing(true)} className="text-white text-sm font-semibold hover:text-[#c9c6c5] transition-colors">Edit</button>
-                <button onClick={() => { localStorage.removeItem("userId"); window.location.reload(); }} className="text-white/40 text-sm font-medium hover:text-red-400 transition-colors">Log Out</button>
+                <button onClick={async () => { await logout(); window.location.reload(); }} className="text-white/40 text-sm font-medium hover:text-red-400 transition-colors">Log Out</button>
               </>
             )}
           </div>

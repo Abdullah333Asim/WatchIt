@@ -198,10 +198,11 @@ export default function ChatView({ onSidebarToggle }: { onSidebarToggle?: (isOpe
           <Plus className="w-5 h-5" />
         </button>
       </div>
-      <div className="max-w-2xl mx-auto w-full flex flex-col relative flex-grow overflow-hidden">
+      <div className="w-full flex flex-col relative flex-grow overflow-hidden">
 
 
-      <div className={`flex-grow overflow-y-auto pb-24 scrollbar-hide px-6 ${messages.length === 0 ? 'flex flex-col items-center justify-center -mt-16 md:mt-0' : 'pt-4 space-y-6'}`}>
+      <div className={`flex-grow overflow-y-auto pb-24 dark-scrollbar w-full ${messages.length === 0 ? 'flex flex-col items-center justify-center -mt-16 md:mt-0' : 'pt-4'}`}>
+        <div className={`max-w-2xl mx-auto w-full px-6 flex flex-col ${messages.length === 0 ? 'items-center justify-center' : 'space-y-6'}`}>
         {messages.length === 0 ? (
           <div className="flex flex-col items-center text-center">
             <h1 className="text-2xl md:text-3xl font-sans font-normal text-[#c9c6c5] tracking-tight mb-2 shadow-sm drop-shadow">
@@ -242,6 +243,7 @@ export default function ChatView({ onSidebarToggle }: { onSidebarToggle?: (isOpe
           </>
         )}
         <div ref={chatEndRef} />
+        </div>
       </div>
 
       {/* Floating Input */}
@@ -299,7 +301,7 @@ export default function ChatView({ onSidebarToggle }: { onSidebarToggle?: (isOpe
                  <Plus className="w-4 h-4" /> New chat
               </button>
 
-              <div className="flex-1 overflow-y-auto space-y-1 scrollbar-hide pb-20">
+              <div className="flex-1 overflow-y-auto space-y-1 dark-scrollbar pb-20">
                  <div className="text-xs font-semibold text-white/40 mb-3 px-4">Recent</div>
                  {conversations.map(c => (
                    <button 

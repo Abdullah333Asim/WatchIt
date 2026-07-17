@@ -1,16 +1,15 @@
 import fs from 'fs';
-let code = fs.readFileSync('server.ts', 'utf-8');
+
+let code = fs.readFileSync('src/components/ProfileView.tsx', 'utf-8');
 
 code = code.replace(
-  `      SELECT m.*, s.action FROM movies m
-      JOIN swipes s ON m.id = s.movie_id
-      WHERE s.user_id = ?
-      ORDER BY s.timestamp DESC`,
-  `      SELECT m.*, s.action FROM movies m
-      JOIN swipes s ON m.id = s.movie_id
-      WHERE s.user_id = ?
-      GROUP BY m.id
-      ORDER BY MAX(s.timestamp) DESC`
+  'import { fetchWithUser } from "../lib/api";',
+  'import { fetchWithUser } from "../lib/api";\nimport { logout } from "../lib/firebase.ts";'
 );
 
-fs.writeFileSync('server.ts', code);
+code = code.replace(
+  /onClick=\{\(\) => \{ localStorage\.removeItem\("userId"\); window\.location\.reload\(\); \}\}/,
+  'onClick={async () => { await logout(); window.location.reload(); }}'
+);
+
+fs.writeFileSync('src/components/ProfileView.tsx', code);

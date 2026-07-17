@@ -1,6 +1,8 @@
 import { motion, AnimatePresence } from "motion/react";
 import { MessageSquare, LayoutGrid, User } from "lucide-react";
 import { useState, useEffect, ReactNode } from "react";
+import { loginWithGoogle, auth } from "./lib/firebase.ts";
+import { onAuthStateChanged } from "firebase/auth";
 import SwipeView from "./components/SwipeView";
 import ChatView from "./components/ChatView";
 import ProfileView from "./components/ProfileView";
@@ -15,7 +17,15 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("swipe");
   const [logoAnimTrigger, setLogoAnimTrigger] = useState(0);
   const [accentColor, setAccentColor] = useState("#c9c6c5");
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => { const id = localStorage.getItem("userId"); return !!id && id !== "undefined" && id !== "null"; });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(!!user);
+      setIsAuthLoading(false);
+    });
+    return unsub;
+  }, []);
   const [movieListType, setMovieListType] = useState<'Watched' | 'Watchlist'>('Watched');
   const [isChatSidebarOpen, setIsChatSidebarOpen] = useState(false);
   useEffect(() => { setLogoAnimTrigger(p => p + 1); }, [activeTab]);
@@ -26,7 +36,8 @@ export default function App() {
   }, [accentColor]);
 
   const renderContent = () => {
-    if (!isAuthenticated) return <LoginView onLogin={(id) => { localStorage.setItem("userId", id); setIsAuthenticated(true); }} />;
+    if (isAuthLoading) return null;
+    if (!isAuthenticated) return <LoginView />;
     switch (activeTab) {
       case "chat": return <ChatView onSidebarToggle={setIsChatSidebarOpen} />;
       case "swipe": return <SwipeView onColorExtracted={setAccentColor} />;
@@ -39,7 +50,7 @@ export default function App() {
     return (
       <>
         {showSplash && <SplashAnimation onComplete={() => setShowSplash(false)} />}
-        <LoginView onLogin={(id) => { localStorage.setItem("userId", id); setIsAuthenticated(true); }} />
+        <LoginView />
       </>
     );
   }
@@ -142,48 +153,28 @@ function NavItem({ active, onClick, icon, label }: { active: boolean, onClick: (
   );
 }
 
-function LoginView({ onLogin }: { onLogin: (id: string) => void }) {
-  useEffect(() => {
-    import('./components/SwipeView').then(mod => {
-      if (mod.preloadMovies) mod.preloadMovies();
-    });
-  }, []);
-  const [isRegister, setIsRegister] = useState(false);
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+
+function LoginView() {
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!username.trim() || !password.trim() || loading) return;
+  
+  const handleLogin = async () => {
+    if (loading) return;
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(isRegister ? "/api/register" : "/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: username.trim(), password })
-      });
-      const data = await res.json();
-      if (res.ok && data.id) {
-        onLogin(data.id);
-      } else {
-        setError(data.error || (isRegister ? "Registration failed" : "Login failed"));
-      }
+      await loginWithGoogle();
     } catch (err) {
       console.error(err);
-      setError("Network error");
+      setError("Login failed");
     } finally {
       setLoading(false);
     }
   };
-
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-white font-sans selection:bg-white/10 relative overflow-hidden">
-      {/* Background preloader for SwipeView */}
       <div className="hidden" aria-hidden="true"></div>
-
       <div className="absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_center,rgba(201,198,197,0.15)_0%,transparent_100%)] pointer-events-none" />
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
@@ -192,27 +183,9 @@ function LoginView({ onLogin }: { onLogin: (id: string) => void }) {
       >
         <div className="text-center mb-10">
           <h1 className="text-5xl font-display font-bold mb-4 tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-white to-[#c9c6c5]">WatchIt</h1>
-          <p className="text-white/50 text-sm font-medium uppercase tracking-widest">{isRegister ? "Create an account" : "Welcome back"}</p>
+          <p className="text-white/50 text-sm font-medium uppercase tracking-widest">Welcome back</p>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-4">
-            <input 
-              type="text" 
-              value={username}
-              onChange={e => setUsername(e.target.value)}
-              placeholder="Username" 
-              className="w-full bg-black/50 text-white px-5 py-4 rounded-xl border border-white/10 outline-none focus:border-[#c9c6c5] transition-all placeholder:text-white/30"
-              required
-            />
-            <input 
-              type="password" 
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="Password" 
-              className="w-full bg-black/50 text-white px-5 py-4 rounded-xl border border-white/10 outline-none focus:border-[#c9c6c5] transition-all placeholder:text-white/30"
-              required
-            />
-          </div>
+        <div className="space-y-6">
           {error && (
             <motion.p 
               initial={{ opacity: 0, height: 0 }} 
@@ -223,27 +196,17 @@ function LoginView({ onLogin }: { onLogin: (id: string) => void }) {
             </motion.p>
           )}
           <button 
-            type="submit" 
-            disabled={loading || !username.trim() || !password.trim()}
+            onClick={handleLogin}
+            disabled={loading}
             className="w-full bg-white text-black font-bold py-4 rounded-xl hover:bg-[#e5e2e1] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-[0.98]"
           >
-            {loading ? (isRegister ? "Creating..." : "Entering...") : (isRegister ? "Sign Up" : "Sign In")}
-          </button>
-        </form>
-        <div className="mt-8 text-center">
-          <button 
-            onClick={() => { setIsRegister(!isRegister); setError(""); }}
-            className="text-sm text-white/40 hover:text-white transition-colors"
-          >
-            {isRegister ? "Already have an account? Sign in" : "Don't have an account? Sign up"}
+            {loading ? "Entering..." : "Sign in with Google"}
           </button>
         </div>
       </motion.div>
     </div>
   );
 }
-
-
 function CardsIcon({ className }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
