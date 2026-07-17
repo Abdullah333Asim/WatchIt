@@ -245,41 +245,41 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" 
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80" 
             onClick={() => setSelectedMovie(null)}
           >
             <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#1c1b1b] border border-white/10 p-6 rounded-3xl max-w-xs w-full shadow-2xl" 
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="bg-[#111] border border-[#333] p-6 rounded-xl max-w-xs w-full" 
               onClick={e => e.stopPropagation()}
             >
               <div className="flex gap-4 mb-6">
-                <img src={selectedMovie.poster_url} className="w-16 h-24 object-cover rounded-lg shadow-md border border-white/5" />
+                <img src={selectedMovie.poster_url} className="w-16 h-24 object-cover rounded-sm border border-[#222]" />
                 <div className="flex flex-col justify-center overflow-hidden">
-                  <h3 className="text-lg font-bold text-white mb-1 leading-tight truncate">{selectedMovie.title}</h3>
-                  <p className="text-white/60 text-sm">{selectedMovie.year}</p>
+                  <h3 className="text-lg font-medium text-white mb-1 leading-tight truncate">{selectedMovie.title}</h3>
+                  <p className="text-[#888] text-sm">{selectedMovie.year}</p>
                 </div>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {listType === 'Watchlist' && (
                   <button 
                     onClick={() => handleMoveToWatched(selectedMovie.id)}
-                    className="w-full py-3 bg-white text-black text-sm font-bold rounded-xl hover:bg-gray-200 transition-colors shadow-lg"
+                    className="w-full py-2.5 bg-white text-black text-sm font-medium rounded-md hover:bg-gray-200 transition-colors"
                   >
                     Mark as Watched
                   </button>
                 )}
                 <button 
                   onClick={() => handleRemove(selectedMovie.id)}
-                  className="w-full py-3 bg-red-500/10 text-red-500 text-sm font-bold rounded-xl hover:bg-red-500/20 transition-colors"
+                  className="w-full py-2.5 bg-[#222] text-red-500 text-sm font-medium rounded-md hover:bg-[#333] transition-colors"
                 >
                   Remove from {listType}
                 </button>
                 <button 
                   onClick={() => setSelectedMovie(null)}
-                  className="w-full py-3 bg-transparent text-white/60 text-sm font-bold rounded-xl hover:text-white transition-colors"
+                  className="w-full py-2.5 bg-transparent text-[#888] text-sm font-medium rounded-md hover:text-white transition-colors"
                 >
                   Cancel
                 </button>

@@ -188,18 +188,20 @@ export default function ChatView({ onSidebarToggle }: { onSidebarToggle?: (isOpe
   };
 
   return (
-    <div className="max-w-2xl mx-auto h-[calc(100vh-160px)] flex flex-col relative w-full">
+    <div className="h-[calc(100vh-160px)] flex flex-col relative w-full">
       {/* Top Bar Navigation */}
-      <div className="w-full flex justify-between px-6 pt-4 z-20 shrink-0">
-        <button onClick={() => setIsSidebarOpen(true)} className="glass-panel p-2 flex items-center gap-2 rounded-xl text-white/60 hover:text-white transition-colors">
+      <div className="w-full flex justify-between px-6 pt-4 z-20 shrink-0 md:fixed md:top-16 md:left-0 md:w-auto md:flex-col md:gap-2 md:pt-4 md:pl-6 pointer-events-none md:[&>*]:pointer-events-auto">
+        <button onClick={() => setIsSidebarOpen(true)} className="pointer-events-auto glass-panel p-2 flex items-center gap-2 rounded-xl text-white/60 hover:text-white transition-colors">
           <Menu className="w-5 h-5" />
         </button>
-        <button onClick={startNewChat} className="glass-panel p-2 flex items-center gap-2 rounded-xl text-white/60 hover:text-white transition-colors">
+        <button onClick={startNewChat} className="pointer-events-auto glass-panel p-2 flex items-center gap-2 rounded-xl text-white/60 hover:text-white transition-colors">
           <Plus className="w-5 h-5" />
         </button>
       </div>
+      <div className="max-w-2xl mx-auto w-full flex flex-col relative flex-grow overflow-hidden">
 
-      <div className={`flex-grow overflow-y-auto pb-24 scrollbar-hide px-6 ${messages.length === 0 ? 'flex flex-col items-center justify-center -mt-16' : 'pt-4 space-y-6'}`}>
+
+      <div className={`flex-grow overflow-y-auto pb-24 scrollbar-hide px-6 ${messages.length === 0 ? 'flex flex-col items-center justify-center -mt-16 md:mt-0' : 'pt-4 space-y-6'}`}>
         {messages.length === 0 ? (
           <div className="flex flex-col items-center text-center">
             <h1 className="text-2xl md:text-3xl font-sans font-normal text-[#c9c6c5] tracking-tight mb-2 shadow-sm drop-shadow">
@@ -317,6 +319,7 @@ export default function ChatView({ onSidebarToggle }: { onSidebarToggle?: (isOpe
           </>
         )}
       </AnimatePresence>
+      </div>
     </div>
   );
 }

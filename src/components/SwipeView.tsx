@@ -125,7 +125,41 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
 
   return (
     <div className="max-w-md mx-auto px-6 pt-4 h-[calc(100vh-160px)] flex flex-col justify-between">
-      <div className="flex justify-center items-center gap-2 mb-2 text-white/50 text-xs font-bold uppercase tracking-wider animate-pulse pt-2">
+
+      {/* Keyboard Shortcuts Guide (Desktop Only) */}
+      <div className="hidden md:flex flex-col fixed left-8 top-1/2 -translate-y-1/2 gap-2 text-white/50 z-50 pointer-events-none">
+        <div className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-0.5">Controls</div>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1">
+            <kbd className="w-6 h-6 flex items-center justify-center bg-white/5 rounded border border-white/10 font-mono text-[10px] text-white shadow-lg">W</kbd>
+            <kbd className="w-6 h-6 flex items-center justify-center bg-white/5 rounded border border-white/10 font-mono text-[10px] text-white shadow-lg">↑</kbd>
+          </div>
+          <span className="text-[10px] font-medium text-[#f59e0b]">Watchlist</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1">
+            <kbd className="w-6 h-6 flex items-center justify-center bg-white/5 rounded border border-white/10 font-mono text-[10px] text-white shadow-lg">A</kbd>
+            <kbd className="w-6 h-6 flex items-center justify-center bg-white/5 rounded border border-white/10 font-mono text-[10px] text-white shadow-lg">←</kbd>
+          </div>
+          <span className="text-[10px] font-medium text-red-500">Not Watched</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1">
+            <kbd className="w-6 h-6 flex items-center justify-center bg-white/5 rounded border border-white/10 font-mono text-[10px] text-white shadow-lg">S</kbd>
+            <kbd className="w-6 h-6 flex items-center justify-center bg-white/5 rounded border border-white/10 font-mono text-[10px] text-white shadow-lg">↓</kbd>
+          </div>
+          <span className="text-[10px] font-medium">Ignore</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1">
+            <kbd className="w-6 h-6 flex items-center justify-center bg-white/5 rounded border border-white/10 font-mono text-[10px] text-white shadow-lg">D</kbd>
+            <kbd className="w-6 h-6 flex items-center justify-center bg-white/5 rounded border border-white/10 font-mono text-[10px] text-white shadow-lg">→</kbd>
+          </div>
+          <span className="text-[10px] font-medium text-[#00dce5]">Watched</span>
+        </div>
+      </div>
+
+      <div className="flex justify-center items-center gap-2 mb-2 text-white/50 text-xs font-bold uppercase tracking-wider animate-pulse pt-2 md:hidden">
         <ArrowUp className="w-4 h-4 animate-bounce" />
         <span>Swipe up to add to watchlist</span>
       </div>
@@ -145,17 +179,18 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
           onSwipe={handleSwipe} 
           onColorExtracted={onColorExtracted}
           onClick={() => setSelectedMovie(movie)}
+          isActive={!selectedMovie}
         />
       </div>
 
       {/* Swipe Instructions */}
-      <div className="w-full flex justify-between items-start px-4 py-2 text-white/50 text-[10px] sm:text-xs font-bold tracking-wider">
+      <div className="w-full flex justify-between items-start px-4 py-2 text-white/50 text-[10px] sm:text-xs font-bold tracking-wider md:hidden">
         <div className="flex flex-col items-center gap-1 w-24 text-center animate-pulse">
-          <ArrowLeft className="w-5 h-5 sm:w-6 sm:h-6 mb-1 animate-bounce" />
-          <span>HAVEN'T<br/>WATCHED</span>
+          <ArrowLeft className="w-5 h-5 sm:w-6 sm:h-6 mb-0.5 animate-bounce" />
+          <span>NOT WATCHED</span>
         </div>
         <div className="flex flex-col items-center gap-1 w-24 text-center animate-pulse">
-          <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 mb-1 animate-bounce" />
+          <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 mb-0.5 animate-bounce" />
           <span>WATCHED</span>
         </div>
       </div>
@@ -195,7 +230,7 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
                     <span className="text-sm font-bold">{selectedMovie.rating}</span>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-3 mb-6 text-sm text-[#c9c6c5] font-medium">
+                <div className="flex flex-wrap items-center gap-2 mb-6 text-sm text-[#c9c6c5] font-medium">
                   <span className="bg-white/5 py-1 px-3 rounded-full border border-white/10">{selectedMovie.year}</span>
                   <span className="bg-white/5 py-1 px-3 rounded-full border border-white/10">{selectedMovie.duration || "120m"}</span>
                   <span className="bg-white/5 py-1 px-3 rounded-full border border-white/10">{selectedMovie.genre}</span>
@@ -215,7 +250,7 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
   );
 }
 
-function Card({ movie, onSwipe, onColorExtracted, onClick }: { movie: Movie, onSwipe: (action: 'Watched' | 'Pass' | 'Watchlist' | 'Not Interested') => void, onColorExtracted: (color: string) => void, onClick?: () => void }) {
+function Card({ movie, onSwipe, onColorExtracted, onClick, isActive = true }: { movie: Movie, onSwipe: (action: 'Watched' | 'Pass' | 'Watchlist' | 'Not Interested') => void, onColorExtracted: (color: string) => void, onClick?: () => void, isActive?: boolean }) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-200, 200], [-30, 30]);
@@ -230,6 +265,57 @@ function Card({ movie, onSwipe, onColorExtracted, onClick }: { movie: Movie, onS
   const controls = useAnimation();
   const imgRef = useRef<HTMLImageElement>(null);
   const isDragging = useRef(false);
+
+  useEffect(() => {
+    if (!isActive) return;
+
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (isDragging.current) return;
+
+      let action: 'Watched' | 'Pass' | 'Watchlist' | 'Not Interested' | null = null;
+      let targetX = 0;
+      let targetY = 0;
+
+      switch (e.key) {
+        case 'ArrowUp':
+        case 'w':
+        case 'W':
+          action = 'Watchlist';
+          targetY = -1000;
+          break;
+        case 'ArrowDown':
+        case 's':
+        case 'S':
+          action = 'Not Interested';
+          targetY = 1000;
+          break;
+        case 'ArrowLeft':
+        case 'a':
+        case 'A':
+          action = 'Pass';
+          targetX = -1000;
+          break;
+        case 'ArrowRight':
+        case 'd':
+        case 'D':
+          action = 'Watched';
+          targetX = 1000;
+          break;
+        default:
+          return;
+      }
+
+      e.preventDefault();
+      isDragging.current = true;
+      await controls.start({ x: targetX, y: targetY, transition: { duration: 0.5 } });
+      onSwipe(action);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isActive, onSwipe, controls]);
 
   useEffect(() => {
     if (imgRef.current) {
@@ -291,7 +377,7 @@ function Card({ movie, onSwipe, onColorExtracted, onClick }: { movie: Movie, onS
 
       {/* Swipe Indicators */}
       <motion.div style={{ opacity: likeOpacity }} className="absolute top-8 left-8 border-4 border-white text-white font-display font-bold py-2 px-4 rounded-xl -rotate-12">WATCHED</motion.div>
-      <motion.div style={{ opacity: passOpacity }} className="absolute top-8 right-8 border-4 border-red-500 text-red-500 font-display font-bold py-2 px-4 rounded-xl rotate-12 text-center text-sm md:text-base leading-tight">HAVEN'T<br/>WATCHED</motion.div>
+      <motion.div style={{ opacity: passOpacity }} className="absolute top-8 right-8 border-4 border-red-500 text-red-500 font-display font-bold py-2 px-4 rounded-xl rotate-12 text-center text-sm md:text-base leading-tight">NOT WATCHED</motion.div>
       <motion.div style={{ opacity: watchlistOpacity }} className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <motion.div className="bg-[#f59e0b] text-black font-display font-bold py-3 px-6 rounded-2xl shadow-2xl">ADD TO WATCHLIST</motion.div>
       </motion.div>
@@ -308,7 +394,7 @@ function Card({ movie, onSwipe, onColorExtracted, onClick }: { movie: Movie, onS
             <span className="text-xs font-bold">{movie.rating}</span>
           </div>
         </div>
-        <div className="flex items-center gap-3 mb-3 text-sm text-white/60">
+        <div className="flex items-center gap-2 mb-3 text-sm text-white/60">
           <span>{movie.year}</span>
           <span className="w-1 h-1 rounded-full bg-white/20" />
           <span>{movie.genre}</span>

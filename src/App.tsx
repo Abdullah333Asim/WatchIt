@@ -5,15 +5,20 @@ import SwipeView from "./components/SwipeView";
 import ChatView from "./components/ChatView";
 import ProfileView from "./components/ProfileView";
 import MovieListView from "./components/MovieListView";
+import SplashAnimation from "./components/SplashAnimation";
+import LogoAnimation from "./components/LogoAnimation";
 
 type Tab = "chat" | "swipe" | "profile" | "movies";
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("swipe");
+  const [logoAnimTrigger, setLogoAnimTrigger] = useState(0);
   const [accentColor, setAccentColor] = useState("#c9c6c5");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => { const id = localStorage.getItem("userId"); return !!id && id !== "undefined" && id !== "null"; });
   const [movieListType, setMovieListType] = useState<'Watched' | 'Watchlist'>('Watched');
   const [isChatSidebarOpen, setIsChatSidebarOpen] = useState(false);
+  useEffect(() => { setLogoAnimTrigger(p => p + 1); }, [activeTab]);
 
   // Global theme update based on accent color
   useEffect(() => {
@@ -31,13 +36,20 @@ export default function App() {
   };
 
   if (!isAuthenticated) {
-    return <LoginView onLogin={(id) => { localStorage.setItem("userId", id); setIsAuthenticated(true); }} />;
+    return (
+      <>
+        {showSplash && <SplashAnimation onComplete={() => setShowSplash(false)} />}
+        <LoginView onLogin={(id) => { localStorage.setItem("userId", id); setIsAuthenticated(true); }} />
+      </>
+    );
   }
 
   return (
-    <div 
-      className="min-h-screen text-[#e5e2e1] font-sans selection:bg-white/10 overflow-x-hidden transition-colors duration-700 bg-black"
-    >
+    <>
+      {showSplash && <SplashAnimation onComplete={() => setShowSplash(false)} />}
+      <div 
+        className="min-h-screen text-[#e5e2e1] font-sans selection:bg-white/10 overflow-x-hidden transition-colors duration-700 bg-black"
+      >
       {/* Ambient background glow that follows accent color */}
       <div 
         className="fixed inset-0 pointer-events-none transition-all duration-1000 z-0 opacity-50"
@@ -51,7 +63,7 @@ export default function App() {
       />
 
       <header id="main-header" className={`${activeTab === 'profile' ? 'absolute' : 'fixed'} top-0 w-full bg-transparent flex justify-center items-center px-6 h-16 z-50 pointer-events-none transition-opacity duration-300 ${isChatSidebarOpen ? 'opacity-0' : 'opacity-100'}`}>
-        <div className="font-bold text-2xl tracking-tighter text-white drop-shadow-lg font-display">WatchIt</div>
+        <LogoAnimation trigger={logoAnimTrigger} />
       </header>
 
       <main className="pt-16 pb-24 md:pb-0 md:pt-16 min-h-screen relative z-10">
@@ -81,7 +93,7 @@ export default function App() {
           <NavItem 
             active={activeTab === 'swipe'} 
             onClick={() => setActiveTab('swipe')} 
-            icon={<LayoutGrid className="w-[18px] h-[18px] flex-shrink-0" />} 
+            icon={<CardsIcon className="w-[18px] h-[18px] flex-shrink-0" />} 
             label="Swipe"
           />
           <NavItem 
@@ -93,6 +105,7 @@ export default function App() {
         </nav>
       </div>
     </div>
+    </>
   );
 }
 
@@ -227,5 +240,16 @@ function LoginView({ onLogin }: { onLogin: (id: string) => void }) {
         </div>
       </motion.div>
     </div>
+  );
+}
+
+
+function CardsIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <rect x="7" y="5" width="10" height="14" rx="2" transform="rotate(-30 12 19)" />
+      <rect x="7" y="5" width="10" height="14" rx="2" transform="rotate(30 12 19)" />
+      <rect x="7" y="5" width="10" height="14" rx="2" fill="#1c1b1b" />
+    </svg>
   );
 }
