@@ -73,6 +73,33 @@ async function startServer() {
     }
   });
 
+
+  app.get("/api/movies/:id/reviews", async (req, res) => {
+    const { id } = req.params;
+    const TMDB_API_KEY = process.env.TMDB_API_KEY;
+    if (!TMDB_API_KEY) {
+      return res.json([]);
+    }
+    try {
+      const resp = await fetch(`https://api.themoviedb.org/3/movie/${id}/reviews?api_key=${TMDB_API_KEY}&language=en-US&page=1`);
+      if (!resp.ok) return res.json([]);
+      const data = await resp.json();
+      if (data.results && data.results.length > 0) {
+        // Only include reviews that are relatively short (e.g. max 250 chars)
+        const shortReviews = data.results.filter((r: any) => r.content.length <= 250);
+        const reviews = shortReviews.slice(0, 2).map((r: any) => ({
+          author: r.author,
+          content: r.content
+        }));
+        return res.json(reviews);
+      }
+      res.json([]);
+    } catch (e) {
+      console.error("Error fetching reviews", e);
+      res.json([]);
+    }
+  });
+
   app.get("/api/movies", async (req, res) => {
     const userId = req.headers["x-user-id"] || "default-user";
     const page = parseInt(req.query.page as string) || 1;

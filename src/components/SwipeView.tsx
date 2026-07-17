@@ -224,23 +224,24 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
               </div>
               <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
                 <div className="flex justify-between items-start mb-4">
-                  <h2 className="text-3xl font-display font-bold text-white leading-tight">{selectedMovie.title}</h2>
+                  <h2 className="text-2xl font-display font-bold text-white leading-tight">{selectedMovie.title}</h2>
                   <div className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-lg shrink-0">
                     <Star className="w-4 h-4 fill-[#c9c6c5] text-[#c9c6c5]" />
                     <span className="text-sm font-bold">{selectedMovie.rating}</span>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 mb-6 text-sm text-[#c9c6c5] font-medium">
+                <div className="flex flex-wrap items-center gap-2 mb-6 text-xs text-[#c9c6c5] font-medium">
                   <span className="bg-white/5 py-1 px-3 rounded-full border border-white/10">{selectedMovie.year}</span>
                   <span className="bg-white/5 py-1 px-3 rounded-full border border-white/10">{selectedMovie.duration || "120m"}</span>
                   <span className="bg-white/5 py-1 px-3 rounded-full border border-white/10">{selectedMovie.genre}</span>
                 </div>
                 <div className="space-y-4">
-                  <h3 className="text-sm font-bold tracking-widest text-white/50 uppercase">Synopsis</h3>
-                  <p className="text-white/80 leading-relaxed">
+                  <h3 className="text-xs font-bold tracking-widest text-white/50 uppercase">Synopsis</h3>
+                  <p className="text-sm text-white/80 leading-relaxed">
                     {selectedMovie.synopsis}
                   </p>
                 </div>
+                <MovieReviews movieId={selectedMovie.id} />
               </div>
             </motion.div>
           </div>
@@ -404,5 +405,63 @@ function Card({ movie, onSwipe, onColorExtracted, onClick, isActive = true }: { 
         </p>
       </div>
     </motion.div>
+  );
+}
+
+
+
+function MovieReviews({ movieId }: { movieId: string }) {
+  const [reviews, setReviews] = useState<{author: string, content: string}[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    setLoading(true);
+    fetch(`/api/movies/${movieId}/reviews`)
+      .then(res => res.json())
+      .then(data => {
+        if (isMounted) {
+          setReviews(data || []);
+          setLoading(false);
+        }
+      })
+      .catch(err => {
+        console.error("Failed to fetch reviews", err);
+        if (isMounted) {
+          setReviews([]);
+          setLoading(false);
+        }
+      });
+    return () => { isMounted = false; };
+  }, [movieId]);
+
+  if (loading) {
+    return (
+      <div className="space-y-4 mt-8 border-t border-white/10 pt-6">
+        <h3 className="text-xs font-bold tracking-widest text-white/50 uppercase">User Reviews</h3>
+        <div className="animate-pulse space-y-3">
+          <div className="h-3 bg-white/10 rounded w-1/4"></div>
+          <div className="h-8 bg-white/10 rounded w-full"></div>
+          <div className="h-3 bg-white/10 rounded w-1/4 mt-4"></div>
+          <div className="h-8 bg-white/10 rounded w-full"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (reviews.length === 0) return null;
+
+  return (
+    <div className="space-y-4 mt-8 border-t border-white/10 pt-6">
+      <h3 className="text-xs font-bold tracking-widest text-white/50 uppercase">User Reviews</h3>
+      <div className="space-y-4">
+        {reviews.map((r, i) => (
+          <div key={i} className="bg-white/5 p-4 rounded-xl border border-white/5">
+            <div className="text-xs font-bold text-white mb-1.5">{r.author}</div>
+            <p className="text-sm text-white/70 italic">"{r.content}"</p>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
