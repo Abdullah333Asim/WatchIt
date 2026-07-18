@@ -13,6 +13,22 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
   const [editName, setEditName] = useState("");
   const [editBio, setEditBio] = useState("");
   const [editAvatar, setEditAvatar] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const [cols, setCols] = useState(4);
+
+  useEffect(() => {
+    const updateCols = () => {
+      const w = window.innerWidth;
+      if (w >= 1024) setCols(8);
+      else if (w >= 768) setCols(6);
+      else if (w >= 640) setCols(5);
+      else setCols(4);
+    };
+    updateCols();
+    window.addEventListener('resize', updateCols);
+    return () => window.removeEventListener('resize', updateCols);
+  }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -28,6 +44,8 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
   }, []);
 
   const handleSave = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
     try {
       const res = await fetchWithUser('/api/profile', {
         method: 'PUT',
@@ -42,6 +60,8 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -90,6 +110,44 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
     }
   };
 
+  const renderMovieList = (title: string, actionType: 'Watchlist' | 'Watched') => {
+    const list = profile.history.filter((h: any) => h.action === actionType);
+    const showViewAllCard = list.length > cols;
+    const displayList = list.slice(0, showViewAllCard ? cols - 1 : cols);
+    const remainingCount = list.length - (cols - 1);
+
+    return (
+      <section className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-xl md:text-2xl font-display font-bold text-[#c9c6c5]">{title}</h2>
+          <button onClick={() => onViewList(actionType)} className="text-sm font-bold text-[#c9c6c5] hover:underline">View All</button>
+        </div>
+        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-3 sm:gap-4">
+          {displayList.map((movie: any) => (
+            <div key={movie.id} onClick={() => setSelectedMovie(movie)} className="group relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 shadow-xl border border-white/5">
+              <img src={movie.poster_url || undefined} className="w-full h-full object-cover" alt="" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+              <div className="absolute bottom-0 left-0 w-full p-2 glass-panel !border-0 !rounded-none translate-y-2 group-hover:translate-y-0 transition-transform">
+                <h4 className="text-[10px] sm:text-xs font-bold text-white truncate px-1">{movie.title}</h4>
+              </div>
+            </div>
+          ))}
+          {showViewAllCard && (
+            <div onClick={() => onViewList(actionType)} className="group relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 shadow-xl border border-white/5 bg-[#1c1b1b] flex flex-col items-center justify-center">
+               <img src={list[cols - 1].poster_url || undefined} className="w-full h-full object-cover opacity-20 group-hover:opacity-10 transition-opacity" alt="" />
+               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none">
+                 <div className="w-8 h-8 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+                    <ChevronRight className="w-4 h-4 text-white" />
+                 </div>
+                 <span className="text-white font-bold text-xs uppercase tracking-wider">+{remainingCount} More</span>
+               </div>
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  };
+
   if (loading) return null;
 
   return (
@@ -102,12 +160,17 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
             className="w-full h-full object-cover" 
             src={isEditing ? (editAvatar || profile.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuCIt82W2GZJFZbpWzZdY2X3ER7_6qkzNy4sk2HEPEyl0HxBJj68_Qe4uN8tvz57BTwNl3D1TffunDYTzKR-fi1GpIAzbKQGv_oj4bdc6s36jxHsjP8Mz-ceoxqbOTh38HWIKKi1269tq191KhzH3TarrD3uKRcCyw4fv1VN8aa7I8TIWppe-BT4kbqH51ksxDLMaZ4hGvLTOcuqtlhqern2xwX8afDRtOid2RfkRXSowZVMyD0lj6OmkaOFGHt8O3A4n-L-GGORooiY") : (profile.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuCIt82W2GZJFZbpWzZdY2X3ER7_6qkzNy4sk2HEPEyl0HxBJj68_Qe4uN8tvz57BTwNl3D1TffunDYTzKR-fi1GpIAzbKQGv_oj4bdc6s36jxHsjP8Mz-ceoxqbOTh38HWIKKi1269tq191KhzH3TarrD3uKRcCyw4fv1VN8aa7I8TIWppe-BT4kbqH51ksxDLMaZ4hGvLTOcuqtlhqern2xwX8afDRtOid2RfkRXSowZVMyD0lj6OmkaOFGHt8O3A4n-L-GGORooiY")}
           />
-          {isEditing && (
+          {isEditing && !isSaving && (
             <div 
               className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={() => fileInputRef.current?.click()}
             >
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+            </div>
+          )}
+          {isSaving && (
+            <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center">
+              <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
             </div>
           )}
           <input 
@@ -144,13 +207,13 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
           <div className="flex flex-wrap justify-center md:justify-start gap-4">
             {isEditing ? (
               <>
-                <button onClick={handleSave} className="text-white text-sm font-semibold hover:text-[#c9c6c5] transition-colors">Save</button>
-                <button onClick={() => setIsEditing(false)} className="text-white/40 text-sm font-medium hover:text-white transition-colors">Cancel</button>
+                <button onClick={handleSave} disabled={isSaving} className={`text-white text-sm font-semibold transition-colors ${isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:text-[#c9c6c5]'}`}>{isSaving ? 'Saving...' : 'Save'}</button>
+                <button onClick={() => setIsEditing(false)} disabled={isSaving} className={`text-white/40 text-sm font-medium transition-colors ${isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:text-white'}`}>Cancel</button>
               </>
             ) : (
               <>
                 <button onClick={() => setIsEditing(true)} className="text-white text-sm font-semibold hover:text-[#c9c6c5] transition-colors">Edit</button>
-                <button onClick={async () => { await logout(); window.location.reload(); }} className="text-white/40 text-sm font-medium hover:text-red-400 transition-colors">Log Out</button>
+                <button onClick={async () => { localStorage.removeItem('guest_token'); await logout(); window.location.reload(); }} className="text-white/40 text-sm font-medium hover:text-red-400 transition-colors">Log Out</button>
               </>
             )}
           </div>
@@ -158,45 +221,9 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
       </section>
 
       <div className="flex flex-col gap-8">
-        {/* Watchlist */}
-        <section className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl md:text-2xl font-display font-bold text-[#c9c6c5]">My Watchlist</h2>
-            <button onClick={() => onViewList('Watchlist')} className="text-sm font-bold text-[#c9c6c5] hover:underline">View All</button>
-          </div>
-          <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-3 sm:gap-4">
-            {profile.history.filter((h: any) => h.action === 'Watchlist').slice(0, 4).map((movie: any) => (
-              <div key={movie.id} onClick={() => setSelectedMovie(movie)} className="group relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 shadow-xl border border-white/5">
-                <img src={movie.poster_url || undefined} className="w-full h-full object-cover" alt="" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
-                <div className="absolute bottom-0 left-0 w-full p-2 glass-panel !border-0 !rounded-none translate-y-2 group-hover:translate-y-0 transition-transform">
-                  <h4 className="text-[10px] sm:text-xs font-bold text-white truncate px-1">{movie.title}</h4>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Recently Swiped */}
-        <section className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl md:text-2xl font-display font-bold text-[#c9c6c5]">Watched</h2>
-            <button onClick={() => onViewList('Watched')} className="text-sm font-bold text-[#c9c6c5] hover:underline">View All</button>
-          </div>
-          <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-3 sm:gap-4">
-            {profile.history.filter((h: any) => h.action === 'Watched').slice(0, 4).map((movie: any) => (
-              <div key={movie.id} onClick={() => setSelectedMovie(movie)} className="group relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 shadow-xl border border-white/5">
-                <img src={movie.poster_url || undefined} className="w-full h-full object-cover" alt="" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
-                <div className="absolute bottom-0 left-0 w-full p-2 glass-panel !border-0 !rounded-none translate-y-2 group-hover:translate-y-0 transition-transform">
-                  <h4 className="text-[10px] sm:text-xs font-bold text-white truncate px-1">{movie.title}</h4>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+        {renderMovieList('My Watchlist', 'Watchlist')}
+        {renderMovieList('Watched', 'Watched')}
       </div>
-
       <AnimatePresence>
         {selectedMovie && (
           <motion.div 

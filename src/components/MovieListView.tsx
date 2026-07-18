@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Filter, Star, Calendar, ChevronDown, X } from "lucide-react";
+import { Filter, Star, Calendar, ChevronDown, X, Search } from "lucide-react";
 import { fetchWithUser } from "../lib/api";
 
 interface Movie {
@@ -25,6 +25,7 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
   const [yearFilter, setYearFilter] = useState<string>('');
   const [genreFilter, setGenreFilter] = useState<string>('');
   const [ratingFilter, setRatingFilter] = useState<number>(0);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchWithUser('/api/profile')
@@ -94,17 +95,19 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
 
   const filteredMovies = useMemo(() => {
     return movies.filter(m => {
+      if (searchQuery && !m.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
       if (yearFilter && m.year.toString() !== yearFilter) return false;
       if (genreFilter && !m.genre.includes(genreFilter)) return false;
       if (ratingFilter > 0 && m.rating < ratingFilter) return false;
       return true;
     });
-  }, [movies, yearFilter, genreFilter, ratingFilter]);
+  }, [movies, yearFilter, genreFilter, ratingFilter, searchQuery]);
 
   const clearFilters = () => {
     setYearFilter('');
     setGenreFilter('');
     setRatingFilter(0);
+    setSearchQuery('');
   };
 
   return (
@@ -181,7 +184,7 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
 
       {/* Main Content */}
       <div className="flex-1">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex justify-between items-center mb-6">
           <div>
             <button onClick={onBack} className="text-sm text-[#00dce5] hover:underline mb-2">&larr; Back to Profile</button>
             <h1 className="text-3xl font-display font-bold text-white">
@@ -196,6 +199,17 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
           >
             <Filter className="w-4 h-4" /> Filters
           </button>
+        </div>
+
+        <div className="relative mb-8">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search movies..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-black/50 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-white outline-none focus:border-[#c9c6c5] transition-colors"
+          />
         </div>
 
         {loading ? (
@@ -217,7 +231,7 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
-                  className="group relative aspect-[2/3] rounded-xl overflow-hidden shadow-xl border border-white/5 bg-[#1a1a1a] cursor-pointer"
+                  className="group relative aspect-[2/3] rounded-md overflow-hidden shadow-xl border border-white/5 bg-[#1a1a1a] cursor-pointer"
                   onClick={() => setSelectedMovie(movie)}
                 >
                   <img src={movie.poster_url} className="w-full h-full object-cover" alt={movie.title} />

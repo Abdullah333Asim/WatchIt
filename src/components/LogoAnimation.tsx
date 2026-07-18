@@ -15,7 +15,7 @@ export default function LogoAnimation({ trigger }: { trigger: number }) {
       setIsAnim(false);
       const t = setTimeout(() => {
         setIsAnim(true);
-      }, 1350); // Wait 1.2s (anim) + 0.15s (pause) then go back to WatchIt
+      }, 1300); // Wait 1.2s (anim) + 0.1s (pause) then go back to WatchIt
       return () => clearTimeout(t);
     }
   }, [trigger]);

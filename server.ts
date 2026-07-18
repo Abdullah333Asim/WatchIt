@@ -8,12 +8,70 @@ import { getRecommendations } from "./server/gemini.ts";
 import { randomUUID, createHash } from "crypto";
 import { requireAuth, AuthRequest } from "./server/middleware.ts";
 import { loadPopularMovies, searchMovieAndSave } from "./server/tmdb.ts";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-guest-key';
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
   
   app.use(express.json({ limit: "50mb" }));
+
+  // Guest Auth Routes
+  app.post("/api/auth/register", async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: "Username and password required" });
+    
+    const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!cleanUsername) return res.status(400).json({ error: "Username must contain alphanumeric characters" });
+
+    try {
+      const existingUser = (await db.select().from(users).where(eq(users.name, cleanUsername))).at(0);
+      if (existingUser) return res.status(400).json({ error: "Username already taken" });
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const userId = `guest_${randomUUID()}`;
+      
+      await db.insert(users).values({
+        id: userId,
+        name: cleanUsername,
+        password: hashedPassword,
+        email: `${cleanUsername}@guest.watchit.com`,
+        bio: 'Guest Cinephile',
+        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`,
+        tasteDna: JSON.stringify({})
+      });
+
+      const token = jwt.sign({ uid: userId, name: cleanUsername }, JWT_SECRET, { expiresIn: '30d' });
+      res.json({ token, user: { uid: userId, name: cleanUsername } });
+    } catch (error) {
+      console.error("Register error", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: "Username and password required" });
+    
+    const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    try {
+      const user = (await db.select().from(users).where(eq(users.name, cleanUsername))).at(0);
+      if (!user || !user.password) return res.status(401).json({ error: "Invalid username or password" });
+
+      const isValid = await bcrypt.compare(password, user.password);
+      if (!isValid) return res.status(401).json({ error: "Invalid username or password" });
+
+      const token = jwt.sign({ uid: user.id, name: user.name }, JWT_SECRET, { expiresIn: '30d' });
+      res.json({ token, user: { uid: user.id, name: user.name } });
+    } catch (error) {
+      console.error("Login error", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
 
   // API Routes
   app.get("/api/movies/:id/reviews", requireAuth, async (req, res) => {
@@ -100,6 +158,7 @@ async function startServer() {
     
     res.json({
       ...user,
+      avatar_url: user.avatarUrl,
       taste_dna: user.tasteDna ? JSON.parse(user.tasteDna) : {},
       history
     });

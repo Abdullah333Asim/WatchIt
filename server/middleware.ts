@@ -4,10 +4,13 @@ import { DecodedIdToken } from 'firebase-admin/auth';
 import { db } from '../src/db/index.ts';
 import { users } from '../src/db/schema.ts';
 import { eq } from 'drizzle-orm';
+import jwt from 'jsonwebtoken';
 
 export interface AuthRequest extends Request {
-  user?: DecodedIdToken;
+  user?: DecodedIdToken | any;
 }
+
+const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-guest-key';
 
 export const requireAuth = async (
   req: AuthRequest,
@@ -20,6 +23,7 @@ export const requireAuth = async (
   }
 
   const token = authHeader.split('Bearer ')[1];
+
   try {
     const decodedToken = await adminAuth.verifyIdToken(token);
     req.user = decodedToken;
@@ -34,9 +38,16 @@ export const requireAuth = async (
       tasteDna: JSON.stringify({})
     }).onConflictDoNothing();
     
-    next();
+    return next();
   } catch (error) {
-    console.error('Error verifying Firebase ID token:', error);
-    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    // Fallback: try decoding custom JWT for guest users
+    try {
+      const decodedGuest = jwt.verify(token, JWT_SECRET) as any;
+      req.user = decodedGuest;
+      return next();
+    } catch (jwtError) {
+      console.error('Error verifying Firebase ID token and custom JWT:', error, jwtError);
+      return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    }
   }
 };

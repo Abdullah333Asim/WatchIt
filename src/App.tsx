@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from "motion/react";
 import { MessageSquare, LayoutGrid, User } from "lucide-react";
 import { useState, useEffect, ReactNode } from "react";
-import { loginWithGoogle, auth } from "./lib/firebase.ts";
+import { loginWithGoogle, auth, loginGuest, registerGuest } from "./lib/firebase.ts";
 import { onAuthStateChanged } from "firebase/auth";
 import SwipeView from "./components/SwipeView";
 import ChatView from "./components/ChatView";
@@ -20,6 +20,13 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   useEffect(() => {
+    const guestToken = localStorage.getItem('guest_token');
+    if (guestToken) {
+      setIsAuthenticated(true);
+      setIsAuthLoading(false);
+      return;
+    }
+
     const unsub = onAuthStateChanged(auth, (user) => {
       setIsAuthenticated(!!user);
       setIsAuthLoading(false);
@@ -155,23 +162,55 @@ function NavItem({ active, onClick, icon, label }: { active: boolean, onClick: (
 
 
 function LoginView() {
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  
-  const handleLogin = async () => {
+  const [isRegister, setIsRegister] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+
+  const handleGoogleLogin = async () => {
     if (loading) return;
     setLoading(true);
     setError("");
     try {
       await loginWithGoogle();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("Login failed");
+      setError(err.message || "Google Login failed");
     } finally {
       setLoading(false);
     }
   };
+
+  const handleGuestAuth = async () => {
+    if (loading) return;
+    if (!username || !password) {
+      setError("Please provide both username and password");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const endpoint = isRegister ? "/api/auth/register" : "/api/auth/login";
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Authentication failed");
+      }
+      localStorage.setItem('guest_token', data.token);
+      window.location.reload(); // Reload to update auth state across the app
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Authentication failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-white font-sans selection:bg-white/10 relative overflow-hidden">
       <div className="hidden" aria-hidden="true"></div>
@@ -179,13 +218,14 @@ function LoginView() {
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md glass-panel p-10 rounded-3xl border border-white/10 shadow-2xl relative z-10"
+        className="w-full max-w-md glass-panel p-10 rounded-3xl border border-white/10 shadow-2xl relative z-10 bg-[#111] backdrop-blur-md"
       >
-        <div className="text-center mb-10">
-          <h1 className="text-5xl font-display font-bold mb-4 tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-white to-[#c9c6c5]">WatchIt</h1>
-          <p className="text-white/50 text-sm font-medium uppercase tracking-widest">Welcome back</p>
+        <div className="text-center mb-8 flex flex-col items-center">
+          <div className="mb-2"><LogoAnimation trigger={0} /></div>
+          <p className="text-white/50 text-sm font-medium uppercase tracking-widest mt-2">{isRegister ? "Create Guest Account" : "Welcome back"}</p>
         </div>
-        <div className="space-y-6">
+
+        <div className="space-y-5">
           {error && (
             <motion.p 
               initial={{ opacity: 0, height: 0 }} 
@@ -195,13 +235,60 @@ function LoginView() {
               {error}
             </motion.p>
           )}
+
+          <div className="space-y-3">
+            <input
+              type="text"
+              placeholder="Username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white appearance-none outline-none focus:border-[#c9c6c5] focus:bg-white/10 transition-all placeholder:text-white/30"
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white appearance-none outline-none focus:border-[#c9c6c5] focus:bg-white/10 transition-all placeholder:text-white/30"
+            />
+            <button 
+              onClick={handleGuestAuth}
+              disabled={loading}
+              className="w-full bg-white text-black font-bold py-3.5 rounded-xl hover:bg-[#e5e2e1] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-[0.98]"
+            >
+              {loading ? "Entering..." : isRegister ? "Create Account" : "Sign In"}
+            </button>
+          </div>
+
+          <div className="relative flex items-center py-2">
+            <div className="flex-grow border-t border-white/10"></div>
+            <span className="flex-shrink-0 mx-4 text-white/30 text-xs uppercase tracking-wider font-medium">Or</span>
+            <div className="flex-grow border-t border-white/10"></div>
+          </div>
+
           <button 
-            onClick={handleLogin}
+            onClick={handleGoogleLogin}
             disabled={loading}
-            className="w-full bg-white text-black font-bold py-4 rounded-xl hover:bg-[#e5e2e1] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-[0.98]"
+            className="w-full bg-white/5 border border-white/10 text-white font-semibold py-3.5 rounded-xl hover:bg-white/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 active:scale-[0.98]"
           >
-            {loading ? "Entering..." : "Sign in with Google"}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-5 h-5">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+            </svg>
+            Sign in with Google
           </button>
+
+          <div className="pt-2 text-center">
+            <button 
+              onClick={() => { setIsRegister(!isRegister); setError(""); }} 
+              className="text-white/40 text-sm hover:text-white transition-colors underline decoration-white/20 underline-offset-4"
+            >
+              {isRegister ? "Already have an account? Sign in." : "New here? Create guest account."}
+            </button>
+          </div>
+
         </div>
       </motion.div>
     </div>
