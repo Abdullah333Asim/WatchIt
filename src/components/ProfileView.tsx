@@ -33,13 +33,23 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
 
   useEffect(() => {
     fetchWithUser('/api/profile')
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) {
+          localStorage.removeItem('guest_token');
+          logout().then(() => window.location.reload());
+          throw new Error("Failed to fetch profile");
+        }
+        return res.json();
+      })
       .then(data => {
         setProfile(data);
         setEditName(data.name || "");
         setEditBio(data.bio || "");
         setEditAvatar(data.avatar_url || "");
         setLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
       });
   }, []);
 

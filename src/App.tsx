@@ -53,13 +53,12 @@ export default function App() {
     }
   };
 
+  if (isAuthLoading) {
+    return <div className="min-h-screen bg-black" />;
+  }
+
   if (!isAuthenticated) {
-    return (
-      <>
-        {showSplash && <SplashAnimation onComplete={() => setShowSplash(false)} />}
-        <LoginView />
-      </>
-    );
+    return <LoginView />;
   }
 
   return (
@@ -175,8 +174,12 @@ function LoginView() {
     try {
       await loginWithGoogle();
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Google Login failed");
+      if (err.code === "auth/popup-closed-by-user") {
+        setError("");
+      } else {
+        console.error(err);
+        setError(err.message || "Google Login failed");
+      }
     } finally {
       setLoading(false);
     }
@@ -204,7 +207,6 @@ function LoginView() {
       localStorage.setItem('guest_token', data.token);
       window.location.reload(); // Reload to update auth state across the app
     } catch (err: any) {
-      console.error(err);
       setError(err.message || "Authentication failed");
     } finally {
       setLoading(false);
@@ -256,7 +258,7 @@ function LoginView() {
               disabled={loading}
               className="w-full bg-white text-black font-bold py-3.5 rounded-xl hover:bg-[#e5e2e1] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-[0.98]"
             >
-              {loading ? "Entering..." : isRegister ? "Create Account" : "Sign In"}
+              {loading ? "Entering..." : isRegister ? "Register" : "Sign In"}
             </button>
           </div>
 

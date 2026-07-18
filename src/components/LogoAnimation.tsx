@@ -48,7 +48,7 @@ export default function LogoAnimation({ trigger }: { trigger: number }) {
       <motion.span layout>h</motion.span>
 
       {/* Space and 'A' placeholder that shrinks to 0 */}
-      <AnimatePresence>
+      <AnimatePresence initial={false}>
         {!isAnim && (
           <motion.span 
             layout 
@@ -73,7 +73,7 @@ export default function LogoAnimation({ trigger }: { trigger: number }) {
       </motion.span>
 
       {/* THE 't' DUPLICATION */}
-      <AnimatePresence>
+      <AnimatePresence initial={false}>
         {isAnim && (
           <motion.span 
             layout 

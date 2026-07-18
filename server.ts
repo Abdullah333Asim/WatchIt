@@ -29,7 +29,15 @@ async function startServer() {
 
     try {
       const existingUser = (await db.select().from(users).where(eq(users.name, cleanUsername))).at(0);
-      if (existingUser) return res.status(400).json({ error: "Username already taken" });
+      if (existingUser) {
+        if (!existingUser.password) return res.status(400).json({ error: "Username already taken" });
+        const isValid = await bcrypt.compare(password, existingUser.password);
+        if (isValid) {
+          const token = jwt.sign({ uid: existingUser.id, name: existingUser.name }, JWT_SECRET, { expiresIn: '30d' });
+          return res.json({ token, user: { uid: existingUser.id, name: existingUser.name } });
+        }
+        return res.status(400).json({ error: "Username already taken" });
+      }
 
       const hashedPassword = await bcrypt.hash(password, 10);
       const userId = `guest_${randomUUID()}`;
@@ -59,8 +67,13 @@ async function startServer() {
     const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
 
     try {
-      const user = (await db.select().from(users).where(eq(users.name, cleanUsername))).at(0);
-      if (!user || !user.password) return res.status(401).json({ error: "Invalid username or password" });
+      let user = (await db.select().from(users).where(eq(users.name, cleanUsername))).at(0);
+      
+      if (!user) {
+        return res.status(401).json({ error: "Invalid username or password" });
+      }
+
+      if (!user.password) return res.status(401).json({ error: "Invalid username or password" });
 
       const isValid = await bcrypt.compare(password, user.password);
       if (!isValid) return res.status(401).json({ error: "Invalid username or password" });
@@ -153,6 +166,11 @@ async function startServer() {
   app.get("/api/profile", requireAuth, async (req, res) => {
     const userId = (req as AuthRequest).user!.uid;
     const user = (await db.select().from(users).where(eq(users.id, userId))).at(0) as any;
+    
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
     const historyResult = await db.execute(sql`SELECT m.*, s.action FROM movies m JOIN swipes s ON m.id = s.movie_id WHERE s.user_id = ${userId} GROUP BY m.id, s.action ORDER BY MAX(s.timestamp) DESC`);
     const history = historyResult.rows || historyResult;
     

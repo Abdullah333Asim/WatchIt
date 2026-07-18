@@ -43,6 +43,10 @@ export const requireAuth = async (
     // Fallback: try decoding custom JWT for guest users
     try {
       const decodedGuest = jwt.verify(token, JWT_SECRET) as any;
+      const userExists = (await db.select().from(users).where(eq(users.id, decodedGuest.uid))).at(0);
+      if (!userExists) {
+        return res.status(401).json({ error: 'Unauthorized: User not found' });
+      }
       req.user = decodedGuest;
       return next();
     } catch (jwtError) {
