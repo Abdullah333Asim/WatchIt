@@ -118,7 +118,13 @@ export async function searchMovieAndSave(title: string, yearStr?: string) {
         }).onConflictDoNothing();
       } catch (e) {}
       
-      return { id: m.id.toString(), poster_url };
+      return { 
+        id: m.id.toString(), 
+        title: m.title,
+        year,
+        poster_url,
+        rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0
+      };
     }
   } catch (e) {
     console.error("Failed to search movie", e);

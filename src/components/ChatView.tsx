@@ -51,10 +51,17 @@ const MessageContent = ({ content, existingWatchlistIds }: { content: string, ex
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
                   </div>
                 )}
-                <div className="p-4 flex flex-col flex-1 gap-2 relative z-10 -mt-10">
+                <div className={`p-4 flex flex-col flex-1 gap-2 relative z-10 ${rec.poster_url ? '-mt-10' : ''}`}>
                   <div className="flex justify-between items-start gap-2 drop-shadow-md">
                     <h3 className="font-display font-bold text-white text-lg leading-tight">{rec.title}</h3>
-                    <span className="text-xs font-bold bg-black/60 text-white/90 px-2 py-1 rounded-md shrink-0 border border-white/10">{rec.year}</span>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span className="text-xs font-bold bg-black/60 text-white/90 px-2 py-1 rounded-md border border-white/10">{rec.year}</span>
+                      {rec.rating > 0 && (
+                        <span className="text-[10px] font-bold bg-[#f59e0b]/20 text-[#f59e0b] px-2 py-0.5 rounded-md border border-[#f59e0b]/30 flex items-center gap-1">
+                          ⭐ {rec.rating}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <p className="text-xs text-white/80 mt-2">{rec.synopsis}</p>
                   <div className="mt-auto pt-4 flex flex-col gap-3">
