@@ -117,7 +117,14 @@ export async function getRecommendations(preferences: string, history: string, q
       response_format: { type: "json_object" },
       temperature: 0.7,
     });
-    return response.choices[0]?.message?.content;
+    if (!("choices" in response)) {
+      throw new Error("Cerebras returned an unexpected response shape");
+    }
+    const firstChoice = response.choices[0];
+    if (!firstChoice) return null;
+    if ("message" in firstChoice) return firstChoice.message?.content;
+    if ("delta" in firstChoice) return firstChoice.delta?.content;
+    return null;
   };
 
   try {

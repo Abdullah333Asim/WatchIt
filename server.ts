@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
@@ -15,7 +16,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-guest-key';
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const portRaw = process.env.PORT ?? "3000";
+  const PORT = Number(portRaw);
+
+  if (!Number.isInteger(PORT) || PORT <= 0) {
+    throw new Error("PORT must be a positive integer.");
+  }
   
   app.use(express.json({ limit: "50mb" }));
 
