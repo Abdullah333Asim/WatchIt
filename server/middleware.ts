@@ -40,6 +40,15 @@ export const requireAuth = async (
     
     return next();
   } catch (error) {
+    const decodedToken = jwt.decode(token, { complete: true }) as
+      | { header?: { alg?: string } }
+      | null;
+
+    if (decodedToken?.header?.alg !== 'HS256') {
+      console.error('Error verifying Firebase ID token:', error);
+      return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    }
+
     // Fallback: try decoding custom JWT for guest users
     try {
       const decodedGuest = jwt.verify(token, JWT_SECRET) as any;

@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { db } from "./src/db/index.ts";
 import { users, movies, swipes, conversations, messages } from "./src/db/schema.ts";
 import { eq, and, sql, notInArray, desc } from "drizzle-orm";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { getRecommendations } from "./server/gemini.ts";
 import { randomUUID, createHash } from "crypto";
 import { requireAuth, AuthRequest } from "./server/middleware.ts";
@@ -14,7 +15,13 @@ import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-guest-key';
 
+async function ensureDatabaseSchema() {
+  await migrate(db, { migrationsFolder: path.join(process.cwd(), 'drizzle') });
+}
+
 async function startServer() {
+  await ensureDatabaseSchema();
+
   const app = express();
   const portRaw = process.env.PORT ?? "3000";
   const PORT = Number(portRaw);
