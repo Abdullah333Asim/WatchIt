@@ -11,7 +11,7 @@ export default function LogoAnimation({ trigger }: { trigger: number }) {
       return;
     }
     
-    if (trigger > 1) {
+    if (trigger > 0) {
       setIsAnim(false);
       const t = setTimeout(() => {
         setIsAnim(true);

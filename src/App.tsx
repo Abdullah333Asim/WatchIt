@@ -35,7 +35,11 @@ export default function App() {
   }, []);
   const [movieListType, setMovieListType] = useState<'Watched' | 'Watchlist'>('Watched');
   const [isChatSidebarOpen, setIsChatSidebarOpen] = useState(false);
-  useEffect(() => { setLogoAnimTrigger(p => p + 1); }, [activeTab]);
+  useEffect(() => {
+    if (activeTab === "chat") {
+      setLogoAnimTrigger((p) => p + 1);
+    }
+  }, [activeTab]);
 
   // Global theme update based on accent color
   useEffect(() => {
