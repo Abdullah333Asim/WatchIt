@@ -235,10 +235,10 @@ async function startServer() {
     
     try {
       const user = (await db.select({ tasteDna: users.tasteDna }).from(users).where(eq(users.id, userId))).at(0) as any;
-      const historyResult = await db.execute(sql`SELECT m.title, s.action FROM movies m JOIN swipes s ON m.id = s.movie_id WHERE s.user_id = ${userId} ORDER BY s.timestamp DESC`);
+      const historyResult = await db.execute(sql`SELECT m.title, s.action FROM movies m JOIN swipes s ON m.id = s.movie_id WHERE s.user_id = ${userId} ORDER BY s.timestamp DESC LIMIT 20`);
       const history = (historyResult.rows || historyResult) as any[];
       
-      const historyStr = history.slice(0, 20).map(h => `${h.title} (${h.action})`).join(", ");
+      const historyStr = history.map(h => `${h.title} (${h.action})`).join(", ");9
       
       let convId = conversationId;
       if (!convId) {
@@ -251,7 +251,7 @@ async function startServer() {
 
       await db.insert(messages).values({ id: randomUUID(), conversationId: convId, role: 'user', content: query });
 
-      const chatHistoryResult = await db.execute(sql`SELECT role, content FROM messages WHERE conversation_id = ${convId} ORDER BY timestamp ASC LIMIT 10`);
+      const chatHistoryResult = await db.execute(sql`SELECT role, content FROM messages WHERE conversation_id = ${convId} ORDER BY timestamp ASC LIMIT 20`);
       const chatHistory = (chatHistoryResult.rows || chatHistoryResult) as any[];
       const chatHistoryStr = chatHistory.map(m => `${m.role === 'user' ? 'User' : 'Cine Noir'}: ${m.content}`).join('\n\n');
 
