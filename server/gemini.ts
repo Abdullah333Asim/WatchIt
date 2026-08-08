@@ -20,14 +20,18 @@ const ai = new GoogleGenAI({
 
 
 export async function getRecommendations(preferences: string, history: string, query: string, chatHistoryText: string = "") {
+  const safeHistory = (history || "").replace(/[\r\n\t]+/g, " ").slice(0, 1000);
+  const safeQuery = (query || "").replace(/[\r\n\t]+/g, " ").slice(0, 500);
+  const safeChatHistory = (chatHistoryText || "").slice(0, 2000);
+
   const prompt = `
     You are Cine Noir, a friendly, semi-formal movie recommender.
-    User's Recently Swiped/Watched History (DO NOT recommend these again): ${history}
+    User's Recently Swiped/Watched History (DO NOT recommend these again): ${safeHistory}
     
     Previous Conversation:
-    ${chatHistoryText}
+    ${safeChatHistory}
     
-    User Request: ${query}
+    User Request: ${safeQuery}
     
     Provide highly specific movie/show recommendations based on their watched history and request. 
     Focus on the "vibe" and specific artistic preferences.

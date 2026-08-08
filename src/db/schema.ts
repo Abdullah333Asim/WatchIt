@@ -1,4 +1,4 @@
-import { pgTable, text, integer, real, timestamp, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, real, timestamp, primaryKey, index } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const users = pgTable('users', {
@@ -28,7 +28,8 @@ export const swipes = pgTable('swipes', {
   action: text('action'),
   timestamp: timestamp('timestamp').defaultNow()
 }, (table) => ({
-  pk: primaryKey({ columns: [table.userId, table.movieId] })
+  pk: primaryKey({ columns: [table.userId, table.movieId] }),
+  userIdIdx: index('swipes_user_id_idx').on(table.userId)
 }));
 
 export const conversations = pgTable('conversations', {
@@ -36,7 +37,9 @@ export const conversations = pgTable('conversations', {
   userId: text('user_id').notNull().references(() => users.id),
   title: text('title'),
   updatedAt: timestamp('updated_at').defaultNow()
-});
+}, (table) => ({
+  userIdIdx: index('conversations_user_id_idx').on(table.userId)
+}));
 
 export const messages = pgTable('messages', {
   id: text('id').primaryKey(),
@@ -44,4 +47,6 @@ export const messages = pgTable('messages', {
   role: text('role'),
   content: text('content'),
   timestamp: timestamp('timestamp').defaultNow()
-});
+}, (table) => ({
+  conversationIdIdx: index('messages_conversation_id_idx').on(table.conversationId)
+}));

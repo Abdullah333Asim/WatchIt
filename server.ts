@@ -7,7 +7,7 @@ import { users, movies, swipes, conversations, messages } from "./src/db/schema.
 import { eq, and, sql, notInArray, desc } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { getRecommendations } from "./server/gemini.ts";
-import { randomUUID, createHash } from "crypto";
+import { randomUUID } from "crypto";
 import { requireAuth, AuthRequest } from "./server/middleware.ts";
 import { loadPopularMovies, searchMovieAndSave } from "./server/tmdb.ts";
 import bcrypt from "bcryptjs";
@@ -107,12 +107,12 @@ async function startServer() {
       return res.json([]);
     }
     try {
-      const resp = await fetch(`https://api.themoviedb.org/3/movie/${id}/reviews?api_key=${TMDB_API_KEY}&language=en-US&page=1`);
+      const resp = await fetch(`https://api.themoviedb.org/3/movie/${encodeURIComponent(id)}/reviews?api_key=${TMDB_API_KEY}&language=en-US&page=1`);
       if (!resp.ok) return res.json([]);
       const data = await resp.json();
       if (data.results && data.results.length > 0) {
         // Only include reviews that are relatively short (e.g. max 250 chars)
-        const shortReviews = data.results.filter((r: any) => r.content.length <= 250);
+        const shortReviews = data.results.filter((r: any) => r.content && r.content.length <= 250);
         const reviews = shortReviews.slice(0, 2).map((r: any) => ({
           author: r.author,
           content: r.content
@@ -130,18 +130,27 @@ async function startServer() {
     const userId = (req as AuthRequest).user!.uid;
     const page = parseInt(req.query.page as string) || 1;
 
-    // Load dynamic movies from TMDB
-    await loadPopularMovies(page);
+    try {
+      // Load dynamic movies from TMDB
+      await loadPopularMovies(page);
 
-    // Get movies the user hasn't swiped on yet
-    const moviesResult = await db.execute(sql`SELECT * FROM movies WHERE id NOT IN (SELECT movie_id FROM swipes WHERE user_id = ${userId}) ORDER BY RANDOM() LIMIT 10`);
-    res.json(moviesResult.rows || moviesResult);
+      // Get movies the user hasn't swiped on yet
+      const moviesResult = await db.execute(sql`SELECT * FROM movies WHERE id NOT IN (SELECT movie_id FROM swipes WHERE user_id = ${userId}) ORDER BY RANDOM() LIMIT 10`);
+      res.json(moviesResult.rows || moviesResult);
+    } catch (error) {
+      console.error("Get movies error", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
   });
 
   app.post("/api/swipe", requireAuth, async (req, res) => {
     const { movieId, action } = req.body;
     const userId = (req as AuthRequest).user!.uid;
     
+    if (!movieId || !action) {
+      return res.status(400).json({ error: "movieId and action are required" });
+    }
+
     try {
       await db.delete(swipes).where(and(eq(swipes.userId, userId), eq(swipes.movieId, movieId)));
       
@@ -149,7 +158,8 @@ async function startServer() {
       
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: (error as Error).message });
+      console.error("Post swipe error", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
@@ -160,7 +170,8 @@ async function startServer() {
       await db.delete(swipes).where(and(eq(swipes.userId, userId), eq(swipes.movieId, movieId)));
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: (error as Error).message });
+      console.error("Delete swipe error", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
@@ -172,27 +183,33 @@ async function startServer() {
       await db.update(swipes).set({ action }).where(and(eq(swipes.userId, userId), eq(swipes.movieId, movieId)));
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: (error as Error).message });
+      console.error("Put swipe error", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
   app.get("/api/profile", requireAuth, async (req, res) => {
     const userId = (req as AuthRequest).user!.uid;
-    const user = (await db.select().from(users).where(eq(users.id, userId))).at(0) as any;
-    
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
+    try {
+      const user = (await db.select().from(users).where(eq(users.id, userId))).at(0) as any;
+      
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
 
-    const historyResult = await db.execute(sql`SELECT m.*, s.action FROM movies m JOIN swipes s ON m.id = s.movie_id WHERE s.user_id = ${userId} GROUP BY m.id, s.action ORDER BY MAX(s.timestamp) DESC`);
-    const history = historyResult.rows || historyResult;
-    
-    res.json({
-      ...user,
-      avatar_url: user.avatarUrl,
-      taste_dna: user.tasteDna ? JSON.parse(user.tasteDna) : {},
-      history
-    });
+      const historyResult = await db.execute(sql`SELECT m.*, s.action FROM movies m JOIN swipes s ON m.id = s.movie_id WHERE s.user_id = ${userId} GROUP BY m.id, s.action ORDER BY MAX(s.timestamp) DESC`);
+      const history = historyResult.rows || historyResult;
+      
+      res.json({
+        ...user,
+        avatar_url: user.avatarUrl,
+        taste_dna: user.tasteDna ? JSON.parse(user.tasteDna) : {},
+        history
+      });
+    } catch (error) {
+      console.error("Get profile error", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
   });
 
   app.put("/api/profile", requireAuth, async (req, res) => {
@@ -202,7 +219,8 @@ async function startServer() {
       await db.update(users).set({ name, bio, avatarUrl: avatar_url }).where(eq(users.id, userId));
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: (error as Error).message });
+      console.error("Put profile error", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
@@ -212,7 +230,8 @@ async function startServer() {
       const convos = await db.select().from(conversations).where(eq(conversations.userId, userId)).orderBy(desc(conversations.updatedAt));
       res.json(convos);
     } catch (error) {
-      res.status(500).json({ error: (error as Error).message });
+      console.error("Get conversations error", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
@@ -225,7 +244,8 @@ async function startServer() {
       const msgs = await db.select().from(messages).where(eq(messages.conversationId, id)).orderBy(messages.timestamp);
       res.json({ conversation: convo, messages: msgs });
     } catch (error) {
-      res.status(500).json({ error: (error as Error).message });
+      console.error("Get conversation error", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
@@ -233,12 +253,16 @@ async function startServer() {
     const { query, conversationId } = req.body;
     const userId = (req as AuthRequest).user!.uid;
     
+    if (!query) {
+      return res.status(400).json({ error: "Query parameter is required" });
+    }
+
     try {
       const user = (await db.select({ tasteDna: users.tasteDna }).from(users).where(eq(users.id, userId))).at(0) as any;
       const historyResult = await db.execute(sql`SELECT m.title, s.action FROM movies m JOIN swipes s ON m.id = s.movie_id WHERE s.user_id = ${userId} ORDER BY s.timestamp DESC LIMIT 20`);
       const history = (historyResult.rows || historyResult) as any[];
       
-      const historyStr = history.map(h => `${h.title} (${h.action})`).join(", ");9
+      const historyStr = history.map(h => `${h.title} (${h.action})`).join(", ");
       
       let convId = conversationId;
       if (!convId) {
@@ -255,7 +279,7 @@ async function startServer() {
       const chatHistory = (chatHistoryResult.rows || chatHistoryResult) as any[];
       const chatHistoryStr = chatHistory.map(m => `${m.role === 'user' ? 'User' : 'Cine Noir'}: ${m.content}`).join('\n\n');
 
-      let response = await getRecommendations(user.taste_dna, historyStr, query, chatHistoryStr);
+      let response = await getRecommendations(user?.tasteDna || "", historyStr, query, chatHistoryStr);
       
       try {
         const parsed = JSON.parse(response);
@@ -283,7 +307,8 @@ async function startServer() {
 
       res.json({ response, conversationId: convId });
     } catch (error) {
-      res.status(500).json({ error: (error as Error).message });
+      console.error("Chat endpoint error", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
