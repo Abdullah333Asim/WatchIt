@@ -3,28 +3,48 @@ using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Drawing.Drawing2D;
+using System.Drawing.Text;
 
 public class IconGen {
-    public static void CreateIcon(int size, string path) {
+    public static void CreateExactIcon(int size, string path) {
         using (Bitmap bmp = new Bitmap(size, size))
         using (Graphics g = Graphics.FromImage(bmp)) {
+            // Fill 100% full rectangle with solid black #000000
             g.Clear(Color.Black);
             g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
 
-            // Draw dark circle (#1c1b1b)
-            using (SolidBrush darkBrush = new SolidBrush(Color.FromArgb(28, 27, 27))) {
-                int margin = (int)(size * 0.1);
-                int circleSize = (int)(size * 0.8);
-                g.FillEllipse(darkBrush, margin, margin, circleSize, circleSize);
+            // Calculate scale ratio relative to 512x512
+            float scale = size / 512.0f;
+            float fontSizeInPixels = 115.0f * scale;
+
+            // Try "Inter", fallback to "Arial"
+            FontFamily family;
+            try {
+                family = new FontFamily("Inter");
+            } catch {
+                family = new FontFamily("Arial");
             }
 
-            // Draw text "WatchIt"
-            using (Font font = new Font("Arial", size * 0.13f, FontStyle.Bold))
+            using (Font font = new Font(family, fontSizeInPixels, FontStyle.Bold, GraphicsUnit.Pixel))
             using (StringFormat sf = new StringFormat()) {
                 sf.Alignment = StringAlignment.Center;
-                sf.LineAlignment = StringAlignment.Center;
-                RectangleF rect = new RectangleF(0, 0, size, size);
-                g.DrawString("WatchIt", font, Brushes.White, rect, sf);
+                sf.LineAlignment = StringAlignment.Near; // baseline relative
+
+                // Draw white text "WatchIt" centered
+                // In SVG: y=295 for 115px font in 512 height (around 52% down from top)
+                float topOffset = (295.0f - (fontSizeInPixels * 0.82f)) * scale;
+                RectangleF rect = new RectangleF(0, topOffset, size, fontSizeInPixels * 1.5f);
+
+                // Thick stroke effect (stroke-width=2 in SVG)
+                using (GraphicsPath pathText = new GraphicsPath()) {
+                    pathText.AddString("WatchIt", family, (int)FontStyle.Bold, fontSizeInPixels, new PointF(size / 2.0f, topOffset), sf);
+                    using (Pen pen = new Pen(Color.White, 3.0f * scale)) {
+                        pen.LineJoin = LineJoin.Round;
+                        g.DrawPath(pen, pathText);
+                    }
+                    g.FillPath(Brushes.White, pathText);
+                }
             }
 
             bmp.Save(path, ImageFormat.Png);
@@ -35,8 +55,8 @@ public class IconGen {
 
 Add-Type -TypeDefinition $code -ReferencedAssemblies System.Drawing
 
-[IconGen]::CreateIcon(192, "c:\Users\HP\Desktop\WatchIt\public\icon-192.png")
-[IconGen]::CreateIcon(512, "c:\Users\HP\Desktop\WatchIt\public\icon-512.png")
-[IconGen]::CreateIcon(512, "c:\Users\HP\Desktop\WatchIt\public\apple-touch-icon.png")
+[IconGen]::CreateExactIcon(192, "c:\Users\HP\Desktop\WatchIt\public\icon-192.png")
+[IconGen]::CreateExactIcon(512, "c:\Users\HP\Desktop\WatchIt\public\icon-512.png")
+[IconGen]::CreateExactIcon(512, "c:\Users\HP\Desktop\WatchIt\public\apple-touch-icon.png")
 
-Write-Host "Icons successfully generated as PNG!"
+Write-Host "Exact favicon PNG icons generated successfully!"
