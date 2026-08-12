@@ -83,13 +83,26 @@ export async function loadPopularMovies(page: number = 1) {
 export async function searchMovieAndSave(title: string, yearStr?: string) {
   if (!TMDB_API_KEY) return null;
   try {
-    const yearQuery = yearStr ? `&primary_release_year=${yearStr}` : '';
-    const res = await fetch(`${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}${yearQuery}&language=en-US`);
+    const cleanTitle = title.replace(/\s*[\(\[\{]\d{4}[\)\]\}]\s*$/, '').trim();
+    const cleanYear = (yearStr && !isNaN(parseInt(yearStr))) ? parseInt(yearStr).toString() : '';
+    const yearQuery = cleanYear ? `&primary_release_year=${cleanYear}` : '';
+    
+    let res = await fetch(`${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(cleanTitle)}${yearQuery}&language=en-US`);
     if (!res.ok) return null;
-    const data = await res.json();
+    let data = await res.json();
+
+    // Fallback: If no results with year filter, retry search without year query
+    if ((!data.results || data.results.length === 0) && yearQuery) {
+      res = await fetch(`${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(cleanTitle)}&language=en-US`);
+      if (res.ok) {
+        data = await res.json();
+      }
+    }
+
     if (data.results && data.results.length > 0) {
-      const m = data.results[0];
-      const year = m.release_date ? parseInt(m.release_date.split('-')[0]) : 0;
+      // Prioritize TMDB result that has a poster_path available
+      const m = data.results.find((item: any) => item.poster_path) || data.results[0];
+      const year = m.release_date ? parseInt(m.release_date.split('-')[0]) : (cleanYear ? parseInt(cleanYear) : 0);
       const genres = (m.genre_ids || []).map((id: number) => GENRES[id]).filter(Boolean).join(', ');
       
       let duration = '120m';
@@ -115,7 +128,15 @@ export async function searchMovieAndSave(title: string, yearStr?: string) {
           synopsis: m.overview || 'No synopsis available.',
           posterUrl: poster_url,
           rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0
-        }).onConflictDoNothing();
+        }).onConflictDoUpdate({
+          target: movies.id,
+          set: {
+            posterUrl: poster_url,
+            title: m.title,
+            year,
+            rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0
+          }
+        });
       } catch (e) {}
       
       return { 

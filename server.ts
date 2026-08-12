@@ -285,13 +285,17 @@ async function startServer() {
         const parsed = JSON.parse(response);
         if (parsed.recommendations && Array.isArray(parsed.recommendations)) {
           for (let rec of parsed.recommendations) {
-            let m = (await db.execute(sql`SELECT id, title, year, poster_url, rating FROM movies WHERE lower(title) = lower(${rec.title})`)).rows?.[0] as any;
-            if (!m) {
-              m = await searchMovieAndSave(rec.title, rec.year);
+            const cleanRecTitle = (rec.title || '').replace(/\s*[\(\[\{]\d{4}[\)\]\}]\s*$/, '').trim();
+            let m = (await db.execute(sql`SELECT id, title, year, poster_url, rating FROM movies WHERE lower(title) = lower(${cleanRecTitle}) OR lower(title) = lower(${rec.title})`)).rows?.[0] as any;
+            if (!m || !m.poster_url) {
+              const searched = await searchMovieAndSave(rec.title, rec.year);
+              if (searched) {
+                m = searched;
+              }
             }
             if (m) {
               rec.movie_id = m.id;
-              rec.poster_url = m.poster_url;
+              rec.poster_url = m.poster_url || m.posterUrl;
               if (m.title) rec.title = m.title;
               if (m.year) rec.year = m.year;
               if (m.rating) rec.rating = m.rating;
