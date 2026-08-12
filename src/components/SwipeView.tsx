@@ -127,6 +127,7 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
 
   return (
     <div className="max-w-md mx-auto px-6 pt-4 h-[calc(100vh-160px)] flex flex-col justify-between">
+      <h1 className="sr-only">Swipe & Discover AI Movie Recommendations</h1>
 
       {/* Keyboard Shortcuts Guide (Desktop Only) */}
       <div className="hidden md:flex flex-col fixed left-8 top-1/2 -translate-y-1/2 gap-2 text-white/50 z-50 pointer-events-none">
@@ -169,7 +170,7 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
         {/* Next Card (Background) */}
         {nextMovie && (
           <div className="absolute inset-0 w-full h-full rounded-2xl overflow-hidden shadow-2xl transform scale-95 translate-y-4 opacity-50 z-0 border border-white/5 bg-[#2b2a2a]">
-            <img src={nextMovie.poster_url || undefined} className="w-full h-full object-cover" alt="" />
+            <img src={nextMovie.poster_url || undefined} className="w-full h-full object-cover" alt={nextMovie.title ? `Poster for ${nextMovie.title}` : "Upcoming movie poster"} />
             <div className="absolute inset-0 bg-gradient-to-t from-[#141313] via-transparent to-transparent" />
           </div>
         )}
@@ -221,7 +222,7 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
                 <X className="w-5 h-5" />
               </button>
               <div className="relative h-64 shrink-0">
-                <img src={selectedMovie.poster_url || undefined} className="w-full h-full object-cover" alt="" />
+                <img src={selectedMovie.poster_url || undefined} className="w-full h-full object-cover" alt={selectedMovie.title ? `Poster for ${selectedMovie.title}` : "Movie poster"} />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#141313] to-transparent" />
               </div>
               <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
@@ -370,7 +371,7 @@ function Card({ movie, onSwipe, onColorExtracted, onClick, isActive = true }: { 
         ref={imgRef}
         src={movie.poster_url || undefined} 
         className="absolute inset-0 w-full h-full object-cover" 
-        alt={movie.title} 
+        alt={movie.title ? `Poster for ${movie.title}` : "Movie poster"} 
         referrerPolicy="no-referrer"
       />
       

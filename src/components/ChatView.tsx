@@ -47,7 +47,7 @@ const MessageContent = ({ content, existingWatchlistIds }: { content: string, ex
               <div key={idx} className="bg-black/40 border border-white/10 rounded-xl overflow-hidden flex flex-col shadow-lg">
                 {rec.poster_url && (
                   <div className="h-48 w-full shrink-0 relative">
-                    <img src={rec.poster_url} alt={rec.title} className="absolute inset-0 w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <img src={rec.poster_url} alt={rec.title ? `Poster for ${rec.title}` : "Movie poster"} className="absolute inset-0 w-full h-full object-cover" referrerPolicy="no-referrer" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
                   </div>
                 )}
@@ -209,6 +209,7 @@ export default function ChatView({ onSidebarToggle }: { onSidebarToggle?: (isOpe
 
 
       <div className={`flex-grow overflow-y-auto pb-24 dark-scrollbar w-full ${messages.length === 0 ? 'flex flex-col items-center justify-center -mt-16 md:mt-0' : 'pt-4'}`}>
+        <h1 className="sr-only">AI Movie Assistant Chat</h1>
         <div className={`max-w-2xl mx-auto w-full px-6 flex flex-col ${messages.length === 0 ? 'items-center justify-center' : 'space-y-6'}`}>
         {messages.length === 0 ? (
           <div className="flex flex-col items-center text-center">

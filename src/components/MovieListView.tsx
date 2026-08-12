@@ -234,11 +234,11 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
                   className="group relative aspect-[2/3] rounded-md overflow-hidden shadow-xl border border-white/5 bg-[#1a1a1a] cursor-pointer"
                   onClick={() => setSelectedMovie(movie)}
                 >
-                  <img src={movie.poster_url} className="w-full h-full object-cover" alt={movie.title} />
+                  <img src={movie.poster_url} className="w-full h-full object-cover" alt={movie.title ? `Poster for ${movie.title}` : "Movie poster"} />
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" />
                   
                   <div className="absolute bottom-0 left-0 w-full p-4 translate-y-0 sm:translate-y-4 sm:group-hover:translate-y-0 transition-transform">
-                    <h4 className="text-sm font-bold text-white mb-1 leading-tight">{movie.title}</h4>
+                    <h2 className="text-sm font-bold text-white mb-1 leading-tight">{movie.title}</h2>
                     <div className="flex items-center gap-2 text-xs font-medium">
                       <span className="text-white/60">{movie.year}</span>
                       <span className="flex items-center gap-1 text-yellow-400">
@@ -270,7 +270,7 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
               onClick={e => e.stopPropagation()}
             >
               <div className="flex gap-4 mb-6">
-                <img src={selectedMovie.poster_url} className="w-16 h-24 object-cover rounded-sm border border-[#222]" />
+                <img src={selectedMovie.poster_url} className="w-16 h-24 object-cover rounded-sm border border-[#222]" alt={selectedMovie.title ? `Poster for ${selectedMovie.title}` : "Movie poster"} />
                 <div className="flex flex-col justify-center overflow-hidden">
                   <h3 className="text-lg font-medium text-white mb-1 leading-tight truncate">{selectedMovie.title}</h3>
                   <p className="text-[#888] text-sm">{selectedMovie.year}</p>

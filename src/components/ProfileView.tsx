@@ -135,16 +135,16 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
         <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-3 sm:gap-4">
           {displayList.map((movie: any) => (
             <div key={movie.id} onClick={() => setSelectedMovie(movie)} className="group relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 shadow-xl border border-white/5">
-              <img src={movie.poster_url || undefined} className="w-full h-full object-cover" alt="" />
+              <img src={movie.poster_url || undefined} className="w-full h-full object-cover" alt={movie.title ? `Poster for ${movie.title}` : "Movie poster"} />
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
               <div className="absolute bottom-0 left-0 w-full p-2 glass-panel !border-0 !rounded-none translate-y-2 group-hover:translate-y-0 transition-transform">
-                <h4 className="text-[10px] sm:text-xs font-bold text-white truncate px-1">{movie.title}</h4>
+                <h3 className="text-[10px] sm:text-xs font-bold text-white truncate px-1">{movie.title}</h3>
               </div>
             </div>
           ))}
           {showViewAllCard && (
             <div onClick={() => onViewList(actionType)} className="group relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 shadow-xl border border-white/5 bg-[#1c1b1b] flex flex-col items-center justify-center">
-               <img src={list[cols - 1].poster_url || undefined} className="w-full h-full object-cover opacity-20 group-hover:opacity-10 transition-opacity" alt="" />
+               <img src={list[cols - 1].poster_url || undefined} className="w-full h-full object-cover opacity-20 group-hover:opacity-10 transition-opacity" alt={list[cols - 1]?.title ? `Poster for ${list[cols - 1].title}` : "More movies preview"} />
                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none">
                  <div className="w-8 h-8 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
                     <ChevronRight className="w-4 h-4 text-white" />
@@ -166,7 +166,7 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
       <section className="flex flex-col md:flex-row items-center md:items-start gap-6 mb-12">
         <div className="relative w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden border-2 border-[#c9c6c5] shadow-[0_0_30px_rgba(201,198,197,0.1)] shrink-0 bg-[#2b2a2a] group">
           <img 
-            alt="Profile Avatar" 
+            alt={profile?.name ? `${profile.name}'s profile avatar` : "User profile avatar"} 
             className="w-full h-full object-cover" 
             src={isEditing ? (editAvatar || profile.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuCIt82W2GZJFZbpWzZdY2X3ER7_6qkzNy4sk2HEPEyl0HxBJj68_Qe4uN8tvz57BTwNl3D1TffunDYTzKR-fi1GpIAzbKQGv_oj4bdc6s36jxHsjP8Mz-ceoxqbOTh38HWIKKi1269tq191KhzH3TarrD3uKRcCyw4fv1VN8aa7I8TIWppe-BT4kbqH51ksxDLMaZ4hGvLTOcuqtlhqern2xwX8afDRtOid2RfkRXSowZVMyD0lj6OmkaOFGHt8O3A4n-L-GGORooiY") : (profile.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuCIt82W2GZJFZbpWzZdY2X3ER7_6qkzNy4sk2HEPEyl0HxBJj68_Qe4uN8tvz57BTwNl3D1TffunDYTzKR-fi1GpIAzbKQGv_oj4bdc6s36jxHsjP8Mz-ceoxqbOTh38HWIKKi1269tq191KhzH3TarrD3uKRcCyw4fv1VN8aa7I8TIWppe-BT4kbqH51ksxDLMaZ4hGvLTOcuqtlhqern2xwX8afDRtOid2RfkRXSowZVMyD0lj6OmkaOFGHt8O3A4n-L-GGORooiY")}
           />
@@ -251,7 +251,7 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
               onClick={e => e.stopPropagation()}
             >
               <div className="flex gap-4 mb-6">
-                <img src={selectedMovie.poster_url} className="w-16 h-24 object-cover rounded-lg shadow-md border border-white/5" />
+                <img src={selectedMovie.poster_url} className="w-16 h-24 object-cover rounded-lg shadow-md border border-white/5" alt={selectedMovie.title ? `Poster for ${selectedMovie.title}` : "Movie poster"} />
                 <div className="flex flex-col justify-center overflow-hidden">
                   <h3 className="text-lg font-bold text-white mb-1 leading-tight truncate">{selectedMovie.title}</h3>
                   <p className="text-white/60 text-sm">{selectedMovie.year}</p>

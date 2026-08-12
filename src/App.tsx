@@ -226,6 +226,7 @@ function LoginView() {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md glass-panel p-10 rounded-3xl border border-white/10 shadow-2xl relative z-10 bg-[#111] backdrop-blur-md"
       >
+        <h1 className="sr-only">WatchIt — AI Movie Recommendations</h1>
         <div className="text-center mb-8 flex flex-col items-center">
           <div className="mb-2"><LogoAnimation trigger={0} /></div>
           <p className="text-white/50 text-sm font-medium uppercase tracking-widest mt-2">{isRegister ? "Create Guest Account" : "Welcome back"}</p>
