@@ -1,4 +1,4 @@
 <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
   <rect width="512" height="512" fill="#000000" />
-  <text x="256" y="295" text-anchor="middle" font-family="'Inter', system-ui, -apple-system, sans-serif" font-weight="900" font-size="115px" letter-spacing="-3px" fill="#ffffff" stroke="#ffffff" stroke-width="2">WatchIt</text>
+  <text x="256" y="282" text-anchor="middle" font-family="'Inter', system-ui, -apple-system, sans-serif" font-weight="900" font-size="82px" letter-spacing="-2px" fill="#ffffff" stroke="#ffffff" stroke-width="1.5">WatchIt</text>
 </svg>
