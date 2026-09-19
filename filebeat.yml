@@ -1,0 +1,22 @@
+filebeat.inputs:
+- type: filestream
+  id: watchit-app-logs
+  paths:
+    - /app-logs/*.log
+  parsers:
+    - ndjson:
+        target: ""
+        overwrite_keys: true
+        add_error_key: true
+        expand_keys: true
+
+setup.kibana:
+  host: "kibana:5601"
+
+setup.ilm.enabled: false
+setup.template.name: "watchit-logs"
+setup.template.pattern: "watchit-logs-*"
+
+output.elasticsearch:
+  hosts: ["elasticsearch:9200"]
+  index: "watchit-logs-%{+yyyy.MM.dd}"

@@ -12,6 +12,7 @@ import jwt from "jsonwebtoken";
 import client from 'prom-client';
 import './server/metrics';
 import { swipeCounter, dbQuerySummary } from './server/metrics';
+import { logger } from './server/logger';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-guest-key';
 
@@ -21,6 +22,21 @@ export function createApp() {
   const app = express();
 
   app.use(express.json({ limit: "50mb" }));
+
+  app.use((req, res, next) => {
+    // Generate a unique Request ID and attach it to the headers
+    const requestId = randomUUID();
+    req.headers['x-request-id'] = requestId;
+
+    // Log the incoming request
+    logger.info({
+      message: `Incoming ${req.method} request to ${req.url}`,
+      severity: 'info',
+      request_id: requestId
+    });
+
+    next();
+  });
 
   // Health check — useful for diagnosing Vercel cold-start and env issues
   app.get("/api/health", async (_req, res) => {
@@ -325,8 +341,13 @@ export function createApp() {
       await db.insert(messages).values({ id: randomUUID(), conversationId: convId, role: 'ai', content: response });
 
       res.json({ response, conversationId: convId });
-    } catch (error) {
-      console.error("Chat endpoint error", error);
+    } catch (error: any) {
+      logger.error({
+        message: "Chat endpoint error",
+        severity: 'error',
+        request_id: req.headers['x-request-id'],
+        error_detail: error.message
+      });
       res.status(500).json({ error: "Internal server error" });
     }
   });

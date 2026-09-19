@@ -15,7 +15,7 @@ WatchIt is a premium, AI-powered movie recommendation and discovery Single Page 
 The interactive swipe matcher (including desktop keyboard navigation), dynamic TMDB metadata backfilling, personalized dashboard filtering, Firebase authentication, and the full AI chat curator are fully functional and integrated with the Drizzle ORM/PostgreSQL backend.
 
 **How to Try It:** 
-The live production build is deployed at: https://watchit.up.railway.app/
+The live production build is deployed at: https://watch-it-rn.vercel.app/
 
 To run the observability environment locally for this assignment:
 1. Clone the repository and switch to the `assignment-1-observability` branch.
@@ -40,3 +40,29 @@ I successfully instrumented my Node.js/Express backend with a Prometheus client 
 *   **Active Requests (Gauge):** A real-time tracker that spikes when multiple users are concurrently asking the AI for recommendations and drops to 0 when idle.
 *   **AI Latency p95 (Histogram):** The query uses `histogram_quantile` to calculate the 95th percentile of AI response times over a 5-minute rolling window, ensuring we see the worst-case delays.
 *   **DB Latency p95 (Summary):** Directly queries the pre-calculated 95th percentile from the Prometheus client to monitor database health.
+
+## Part C: Logs
+
+**1. What, why, and where we log:**
+I log every incoming HTTP request and API errors using the `winston` library in Node.js. Request logging happens via a global middleware in `app.ts`, attaching a unique `request_id` to trace user journeys. The logs are written locally to `logs/app.log` in JSON format. The service name was explicitly mapped as `service_name` to prevent ECS mapping conflicts in Elasticsearch.
+
+**2. Filebeat Collection and Parsing:**
+A Dockerized Filebeat instance is configured with a `filestream` input mapped to a read-only volume (`/app-logs`). It reads the `ndjson` lines and forwards them directly to Elasticsearch. Data Streams were disabled, and a custom index template (`watchit-logs-*`) was applied to prevent built-in template priority collisions.
+
+**3. Log Storage and Lifecycle:**
+Logs reside inside a local Elasticsearch container. Searching is performed in Kibana by querying the `watchit-logs-*` Data View.
+
+**4. Searching in Kibana:**
+To trace a specific request flow or debug an issue, I use the KQL search bar in the Discover tab. For example:
+`severity: "error" and request_id: "36fcadd0-04a3-43fc-a22d-3945387cd478"`
+
+**Sample Stored Log:**
+```json
+{
+  "level": "info",
+  "message": "Incoming POST request to /api/swipe",
+  "time": "2026-09-19T15:08:42.919Z",
+  "service_name": "watchit-backend",
+  "severity": "info",
+  "request_id": "47c63250-9b44-4ac1-92ab-adffc6701751"
+}
