@@ -18,7 +18,7 @@ const pool = new pg.Pool(
     ? {
         connectionString: sqlConnectionString,
         ssl: sqlSsl ? { rejectUnauthorized: sqlSslRejectUnauthorized } : undefined,
-        connectionTimeoutMillis: 15000,
+        connectionTimeoutMillis: 8000,
       }
     : {
         host: process.env.SQL_HOST,
@@ -27,7 +27,7 @@ const pool = new pg.Pool(
         password: process.env.SQL_PASSWORD,
         database: process.env.SQL_DB_NAME,
         ssl: sqlSsl ? { rejectUnauthorized: sqlSslRejectUnauthorized } : undefined,
-        connectionTimeoutMillis: 15000,
+        connectionTimeoutMillis: 8000,
       }
 );
 

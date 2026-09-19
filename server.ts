@@ -1,11 +1,9 @@
 import 'dotenv/config';
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import { db } from "./src/db/index.ts";
 import { users, movies, swipes, conversations, messages } from "./src/db/schema.ts";
-import { eq, and, sql, notInArray, desc } from "drizzle-orm";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
+import { eq, and, sql, desc } from "drizzle-orm";
 import { getRecommendations } from "./server/gemini.ts";
 import { randomUUID } from "crypto";
 import { requireAuth, AuthRequest } from "./server/middleware.ts";
@@ -15,21 +13,11 @@ import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-guest-key';
 
-async function ensureDatabaseSchema() {
-  await migrate(db, { migrationsFolder: path.join(process.cwd(), 'drizzle') });
-}
-
-async function startServer() {
-  await ensureDatabaseSchema();
-
+// Returns a fully-configured Express app WITHOUT calling app.listen().
+// Safe to import in a Vercel serverless function.
+export async function createApp() {
   const app = express();
-  const portRaw = process.env.PORT ?? "3000";
-  const PORT = Number(portRaw);
 
-  if (!Number.isInteger(PORT) || PORT <= 0) {
-    throw new Error("PORT must be a positive integer.");
-  }
-  
   app.use(express.json({ limit: "50mb" }));
 
   // Guest Auth Routes
@@ -80,7 +68,7 @@ async function startServer() {
     const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
 
     try {
-      let user = (await db.select().from(users).where(eq(users.name, cleanUsername))).at(0);
+      const user = (await db.select().from(users).where(eq(users.name, cleanUsername))).at(0);
       
       if (!user) {
         return res.status(401).json({ error: "Invalid username or password" });
@@ -111,7 +99,6 @@ async function startServer() {
       if (!resp.ok) return res.json([]);
       const data = await resp.json();
       if (data.results && data.results.length > 0) {
-        // Only include reviews that are relatively short (e.g. max 250 chars)
         const shortReviews = data.results.filter((r: any) => r.content && r.content.length <= 250);
         const reviews = shortReviews.slice(0, 2).map((r: any) => ({
           author: r.author,
@@ -131,10 +118,7 @@ async function startServer() {
     const page = parseInt(req.query.page as string) || 1;
 
     try {
-      // Load dynamic movies from TMDB
       await loadPopularMovies(page);
-
-      // Get movies the user hasn't swiped on yet
       const moviesResult = await db.execute(sql`SELECT * FROM movies WHERE id NOT IN (SELECT movie_id FROM swipes WHERE user_id = ${userId}) ORDER BY RANDOM() LIMIT 10`);
       res.json(moviesResult.rows || moviesResult);
     } catch (error) {
@@ -153,9 +137,7 @@ async function startServer() {
 
     try {
       await db.delete(swipes).where(and(eq(swipes.userId, userId), eq(swipes.movieId, movieId)));
-      
       await db.insert(swipes).values({ userId, movieId, action });
-      
       res.json({ success: true });
     } catch (error) {
       console.error("Post swipe error", error);
@@ -316,7 +298,22 @@ async function startServer() {
     }
   });
 
-  // Vite middleware for development
+  return app;
+}
+
+// ─── Local development entrypoint ────────────────────────────────────────────
+// Only runs when executed directly (not imported by Vercel's serverless runtime)
+if (!process.env.VERCEL) {
+  const { createServer: createViteServer } = await import("vite");
+  const portRaw = process.env.PORT ?? "3000";
+  const PORT = Number(portRaw);
+
+  if (!Number.isInteger(PORT) || PORT <= 0) {
+    throw new Error("PORT must be a positive integer.");
+  }
+
+  const app = await createApp();
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -324,9 +321,11 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
+    const { default: path } = await import("path");
     const distPath = path.join(process.cwd(), "dist");
+    const { default: express } = await import("express");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
@@ -335,5 +334,3 @@ async function startServer() {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
-
-startServer();
