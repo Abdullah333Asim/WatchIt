@@ -42,6 +42,12 @@ export async function loadPopularMovies(page: number = 1) {
     if (data.results && Array.isArray(data.results)) {
        for (const m of data.results) {
          if (!m.poster_path) continue;
+
+         // Skip the expensive per-movie detail call if this movie is already in the DB.
+         // This prevents ~20 sequential TMDB HTTP calls on every /api/movies request.
+         const existing = (await db.execute(sql`SELECT id FROM movies WHERE id = ${m.id.toString()}`)).rows?.[0];
+         if (existing) continue;
+
          const year = m.release_date ? parseInt(m.release_date.split('-')[0]) : 0;
          const genres = (m.genre_ids || []).map((id: number) => GENRES[id]).filter(Boolean).join(', ');
          
@@ -79,6 +85,7 @@ export async function loadPopularMovies(page: number = 1) {
   }
   return false;
 }
+
 
 export async function searchMovieAndSave(title: string, yearStr?: string) {
   if (!TMDB_API_KEY) return null;

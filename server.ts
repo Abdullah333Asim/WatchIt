@@ -20,6 +20,28 @@ export async function createApp() {
 
   app.use(express.json({ limit: "50mb" }));
 
+  // Health check — useful for diagnosing Vercel cold-start and env issues
+  app.get("/api/health", async (_req, res) => {
+    const checks: Record<string, unknown> = {
+      env: {
+        hasFirebaseServiceAccount: !!process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
+        hasTmdbKey: !!process.env.TMDB_API_KEY,
+        hasGeminiKey: !!process.env.GEMINI_API_KEY || !!process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+        hasJwtSecret: !!process.env.JWT_SECRET,
+        hasDatabaseUrl: !!process.env.DATABASE_URL,
+        nodeEnv: process.env.NODE_ENV,
+        isVercel: !!process.env.VERCEL,
+      },
+    };
+    try {
+      await db.execute(sql`SELECT 1`);
+      checks.database = "ok";
+    } catch (e: any) {
+      checks.database = `error: ${e.message}`;
+    }
+    res.json(checks);
+  });
+
   // Guest Auth Routes
   app.post("/api/auth/register", async (req, res) => {
     const { username, password } = req.body;
