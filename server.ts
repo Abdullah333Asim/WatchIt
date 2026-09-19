@@ -326,33 +326,36 @@ export async function createApp() {
 // ─── Local development entrypoint ────────────────────────────────────────────
 // Only runs when executed directly (not imported by Vercel's serverless runtime)
 if (!process.env.VERCEL) {
-  const { createServer: createViteServer } = await import("vite");
-  const portRaw = process.env.PORT ?? "3000";
-  const PORT = Number(portRaw);
+  async function startLocalServer() {
+    const { createServer: createViteServer } = await import("vite");
+    const portRaw = process.env.PORT ?? "3000";
+    const PORT = Number(portRaw);
 
-  if (!Number.isInteger(PORT) || PORT <= 0) {
-    throw new Error("PORT must be a positive integer.");
-  }
+    if (!Number.isInteger(PORT) || PORT <= 0) {
+      throw new Error("PORT must be a positive integer.");
+    }
 
-  const app = await createApp();
+    const app = await createApp();
 
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
+    if (process.env.NODE_ENV !== "production") {
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } else {
+      const { default: path } = await import("path");
+      const distPath = path.join(process.cwd(), "dist");
+      const { default: express } = await import("express");
+      app.use(express.static(distPath));
+      app.get("*", (_req, res) => {
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+    }
+
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
     });
-    app.use(vite.middlewares);
-  } else {
-    const { default: path } = await import("path");
-    const distPath = path.join(process.cwd(), "dist");
-    const { default: express } = await import("express");
-    app.use(express.static(distPath));
-    app.get("*", (_req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
   }
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  startLocalServer().catch(console.error);
 }
