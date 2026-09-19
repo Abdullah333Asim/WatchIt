@@ -2,7 +2,7 @@
 
 WatchIt is a premium, highly responsive Vite/React Single Page Application designed to simplify movie discovery. Users can interactively swipe through recommendations, chat with a highly sophisticated AI movie curator, build watchlists, and manage their cinematic profile.
 
-The live application is deployed at: **[https://watchit.up.railway.app/](https://watchit.up.railway.app/)**
+The live application is deployed at: **https://watch-it-rn.vercel.app/**
 
 ---
 
