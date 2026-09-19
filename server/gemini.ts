@@ -2,6 +2,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import Groq from "groq-sdk";
 import Cerebras from "@cerebras/cerebras_cloud_sdk";
 import dotenv from "dotenv";
+import { activeAiRequests, aiLatencyHistogram } from './metrics';
 
 dotenv.config();
 
@@ -131,15 +132,29 @@ export async function getRecommendations(preferences: string, history: string, q
     return null;
   };
 
+  // Start the trackers before the AI race begins
+  activeAiRequests.inc();
+  const endAiTimer = aiLatencyHistogram.startTimer();
+
   try {
     // Race them for the fastest response!
     const result = await Promise.any([fetchCerebras(), fetchGroq(), fetchGemini()]);
+    
+    // Stop the trackers on success
+    endAiTimer();
+    activeAiRequests.dec();
+    
     if (!result) throw new Error("Empty response");
     return result;
   } catch (error) {
     console.error("Both APIs failed or returned empty", error);
     // Fallback to one more try with Gemini just in case
     const fallback = await fetchGemini();
+    
+    // Stop the trackers on fallback completion
+    endAiTimer();
+    activeAiRequests.dec();
+    
     return fallback;
   }
 }

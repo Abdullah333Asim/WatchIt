@@ -7,3 +7,8 @@ scrape_configs:
       - targets: ['node-exporter:9100']
         labels:
           machine: 'HP-ZBook-Local'
+
+  - job_name: 'watchit-backend'
+    static_configs:
+      # 'host.docker.internal' allows the Docker container to see your local computer's port 3000
+      - targets: ['host.docker.internal:3000']

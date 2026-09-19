@@ -9,6 +9,9 @@ import { requireAuth, AuthRequest } from "./server/middleware";
 import { loadPopularMovies, searchMovieAndSave } from "./server/tmdb";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import client from 'prom-client';
+import './server/metrics';
+import { swipeCounter, dbQuerySummary } from './server/metrics';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-guest-key';
 
@@ -155,6 +158,7 @@ export function createApp() {
     if (!movieId || !action) {
       return res.status(400).json({ error: "movieId and action are required" });
     }
+    swipeCounter.labels(action).inc();
 
     try {
       await db.delete(swipes).where(and(eq(swipes.userId, userId), eq(swipes.movieId, movieId)));
@@ -193,6 +197,7 @@ export function createApp() {
 
   app.get("/api/profile", requireAuth, async (req, res) => {
     const userId = (req as AuthRequest).user!.uid;
+    const endDbTimer = dbQuerySummary.startTimer();
     try {
       const user = (await db.select().from(users).where(eq(users.id, userId))).at(0) as any;
       
@@ -202,7 +207,7 @@ export function createApp() {
 
       const historyResult = await db.execute(sql`SELECT m.*, s.action FROM movies m JOIN swipes s ON m.id = s.movie_id WHERE s.user_id = ${userId} GROUP BY m.id, s.action ORDER BY MAX(s.timestamp) DESC`);
       const history = historyResult.rows || historyResult;
-      
+      endDbTimer();
       res.json({
         ...user,
         avatar_url: user.avatarUrl,
@@ -210,6 +215,7 @@ export function createApp() {
         history
       });
     } catch (error) {
+      endDbTimer();
       console.error("Get profile error", error);
       res.status(500).json({ error: "Internal server error" });
     }
@@ -250,6 +256,12 @@ export function createApp() {
       console.error("Get conversation error", error);
       res.status(500).json({ error: "Internal server error" });
     }
+  });
+
+  app.get('/metrics', async (req, res) => {
+    res.setHeader('Content-Type', client.register.contentType);
+    const metrics = await client.register.metrics();
+    res.send(metrics);
   });
 
   app.post("/api/chat", requireAuth, async (req, res) => {
