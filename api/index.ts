@@ -6,13 +6,9 @@
  * from server.ts and export it as the default export — Vercel handles the
  * Node.js IncomingMessage / ServerResponse adapter automatically.
  */
-import { createApp } from '../server.ts';
+import { createApp } from '../server';
 
-// Build the app once at module load time (cold start).
-// Subsequent warm invocations reuse this instance.
-const appPromise = createApp();
+const app = createApp();
 
-export default async function handler(req: any, res: any) {
-  const app = await appPromise;
-  app(req, res);
-}
+export default app;
+

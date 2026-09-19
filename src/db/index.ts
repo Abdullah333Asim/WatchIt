@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
-import * as schema from './schema.ts';
+import * as schema from './schema';
 
 const sqlConnectionString = process.env.DATABASE_URL || process.env.SQL_CONNECTION_STRING;
 const sqlPortRaw = process.env.SQL_PORT;

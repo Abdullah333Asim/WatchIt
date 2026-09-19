@@ -1,13 +1,12 @@
 import 'dotenv/config';
 import express from "express";
-import path from "path";
-import { db } from "./src/db/index.ts";
-import { users, movies, swipes, conversations, messages } from "./src/db/schema.ts";
+import { db } from "./src/db/index";
+import { users, movies, swipes, conversations, messages } from "./src/db/schema";
 import { eq, and, sql, desc } from "drizzle-orm";
-import { getRecommendations } from "./server/gemini.ts";
+import { getRecommendations } from "./server/gemini";
 import { randomUUID } from "crypto";
-import { requireAuth, AuthRequest } from "./server/middleware.ts";
-import { loadPopularMovies, searchMovieAndSave } from "./server/tmdb.ts";
+import { requireAuth, AuthRequest } from "./server/middleware";
+import { loadPopularMovies, searchMovieAndSave } from "./server/tmdb";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
@@ -15,7 +14,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-guest-key';
 
 // Returns a fully-configured Express app WITHOUT calling app.listen().
 // Safe to import in a Vercel serverless function.
-export async function createApp() {
+export function createApp() {
   const app = express();
 
   app.use(express.json({ limit: "50mb" }));
@@ -335,7 +334,7 @@ if (!process.env.VERCEL) {
       throw new Error("PORT must be a positive integer.");
     }
 
-    const app = await createApp();
+    const app = createApp();
 
     if (process.env.NODE_ENV !== "production") {
       const vite = await createViteServer({

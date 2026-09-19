@@ -1,5 +1,5 @@
-import { db } from "../src/db/index.ts";
-import { movies } from "../src/db/schema.ts";
+import { db } from "../src/db/index";
+import { movies } from "../src/db/schema";
 import { sql } from "drizzle-orm";
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';

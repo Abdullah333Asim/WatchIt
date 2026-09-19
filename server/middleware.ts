@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import { adminAuth } from './firebase-admin.ts';
+import { adminAuth } from './firebase-admin';
 import { DecodedIdToken } from 'firebase-admin/auth';
-import { db } from '../src/db/index.ts';
-import { users } from '../src/db/schema.ts';
+import { db } from '../src/db/index';
+import { users } from '../src/db/schema';
 import { eq } from 'drizzle-orm';
 import jwt from 'jsonwebtoken';
 
