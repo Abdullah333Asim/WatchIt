@@ -1,0 +1,765 @@
+var __defProp = Object.defineProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+
+// server.ts
+import "dotenv/config";
+import express from "express";
+
+// src/db/index.ts
+import "dotenv/config";
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
+
+// src/db/schema.ts
+var schema_exports = {};
+__export(schema_exports, {
+  conversations: () => conversations,
+  messages: () => messages,
+  movies: () => movies,
+  swipes: () => swipes,
+  users: () => users
+});
+import { pgTable, text, integer, real, timestamp, primaryKey, index } from "drizzle-orm/pg-core";
+var users = pgTable("users", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  email: text("email"),
+  bio: text("bio"),
+  avatarUrl: text("avatar_url"),
+  tasteDna: text("taste_dna"),
+  password: text("password")
+});
+var movies = pgTable("movies", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  year: integer("year"),
+  genre: text("genre"),
+  duration: text("duration"),
+  synopsis: text("synopsis"),
+  posterUrl: text("poster_url"),
+  rating: real("rating")
+});
+var swipes = pgTable("swipes", {
+  userId: text("user_id").notNull().references(() => users.id),
+  movieId: text("movie_id").notNull().references(() => movies.id),
+  action: text("action"),
+  timestamp: timestamp("timestamp").defaultNow()
+}, (table) => ({
+  pk: primaryKey({ columns: [table.userId, table.movieId] }),
+  userIdIdx: index("swipes_user_id_idx").on(table.userId)
+}));
+var conversations = pgTable("conversations", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id),
+  title: text("title"),
+  updatedAt: timestamp("updated_at").defaultNow()
+}, (table) => ({
+  userIdIdx: index("conversations_user_id_idx").on(table.userId)
+}));
+var messages = pgTable("messages", {
+  id: text("id").primaryKey(),
+  conversationId: text("conversation_id").notNull().references(() => conversations.id),
+  role: text("role"),
+  content: text("content"),
+  timestamp: timestamp("timestamp").defaultNow()
+}, (table) => ({
+  conversationIdIdx: index("messages_conversation_id_idx").on(table.conversationId)
+}));
+
+// src/db/index.ts
+var sqlConnectionString = process.env.DATABASE_URL || process.env.SQL_CONNECTION_STRING;
+var sqlPortRaw = process.env.SQL_PORT;
+var sqlPort = sqlPortRaw ? Number(sqlPortRaw) : void 0;
+if (sqlPortRaw && (!Number.isInteger(sqlPort) || sqlPort <= 0)) {
+  throw new Error("SQL_PORT must be a positive integer.");
+}
+var sqlSsl = process.env.SQL_SSL === "true";
+var sqlSslRejectUnauthorized = process.env.SQL_SSL_REJECT_UNAUTHORIZED === "true";
+var pool = new pg.Pool(
+  sqlConnectionString ? {
+    connectionString: sqlConnectionString,
+    ssl: sqlSsl ? { rejectUnauthorized: sqlSslRejectUnauthorized } : void 0,
+    connectionTimeoutMillis: 8e3
+  } : {
+    host: process.env.SQL_HOST,
+    port: sqlPort,
+    user: process.env.SQL_USER,
+    password: process.env.SQL_PASSWORD,
+    database: process.env.SQL_DB_NAME,
+    ssl: sqlSsl ? { rejectUnauthorized: sqlSslRejectUnauthorized } : void 0,
+    connectionTimeoutMillis: 8e3
+  }
+);
+pool.on("error", (err) => {
+  console.error("Unexpected error on idle SQL pool client:", err);
+});
+var db = drizzle(pool, { schema: schema_exports });
+
+// server.ts
+import { eq as eq2, and, sql as sql2, desc } from "drizzle-orm";
+
+// server/gemini.ts
+import { GoogleGenAI, Type } from "@google/genai";
+import Groq from "groq-sdk";
+import Cerebras from "@cerebras/cerebras_cloud_sdk";
+import dotenv from "dotenv";
+dotenv.config();
+if (!process.env.GEMINI_API_KEY) {
+  console.warn("GEMINI_API_KEY is not set. AI features will not work.");
+}
+var ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || "",
+  httpOptions: {
+    headers: {
+      "User-Agent": "aistudio-build"
+    }
+  }
+});
+async function getRecommendations(preferences, history, query, chatHistoryText = "") {
+  const safeHistory = (history || "").replace(/[\r\n\t]+/g, " ").slice(0, 1e3);
+  const safeQuery = (query || "").replace(/[\r\n\t]+/g, " ").slice(0, 500);
+  const safeChatHistory = (chatHistoryText || "").slice(0, 2e3);
+  const prompt = `
+    You are Cine Noir, a friendly, semi-formal movie recommender.
+    User's Recently Swiped/Watched History (DO NOT recommend these again): ${safeHistory}
+    
+    Previous Conversation:
+    ${safeChatHistory}
+    
+    User Request: ${safeQuery}
+    
+    Provide highly specific movie/show recommendations based on their watched history and request. 
+    Focus on the "vibe" and specific artistic preferences.
+    Act as if you are a sophisticated curator in a dark, atmospheric theater lobby.
+
+    You MUST respond with valid JSON in the following format:
+    {
+      "reply": "Your conversational reply to the user, spoken as Cine Noir.",
+      "recommendations": [
+        {
+          "title": "Movie title",
+          "year": "Release year",
+          "synopsis": "Brief synopsis",
+          "why_it_matches": "Why it matches their taste"
+        }
+      ]
+    }
+  `;
+  const fetchGemini = async () => {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            reply: {
+              type: Type.STRING,
+              description: "Your conversational reply to the user, spoken as Cine Noir."
+            },
+            recommendations: {
+              type: Type.ARRAY,
+              description: "A list of movie recommendations.",
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  title: { type: Type.STRING, description: "Movie title" },
+                  year: { type: Type.STRING, description: "Release year" },
+                  synopsis: { type: Type.STRING, description: "Brief synopsis" },
+                  why_it_matches: { type: Type.STRING, description: "Why it matches their taste" }
+                },
+                required: ["title", "year", "synopsis", "why_it_matches"]
+              }
+            }
+          },
+          required: ["reply", "recommendations"]
+        }
+      }
+    });
+    return response.text;
+  };
+  const fetchGroq = async () => {
+    if (!process.env.GROQ_API_KEY) {
+      throw new Error("GROQ_API_KEY not set");
+    }
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    const response = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      model: "llama-3.3-70b-versatile",
+      response_format: { type: "json_object" },
+      temperature: 0.7
+    });
+    return response.choices[0]?.message?.content;
+  };
+  const fetchCerebras = async () => {
+    if (!process.env.CEREBRAS_API_KEY) {
+      throw new Error("CEREBRAS_API_KEY not set");
+    }
+    const cerebras = new Cerebras({ apiKey: process.env.CEREBRAS_API_KEY });
+    const response = await cerebras.chat.completions.create({
+      messages: [
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      model: "llama3.1-70b",
+      response_format: { type: "json_object" },
+      temperature: 0.7
+    });
+    if (!("choices" in response)) {
+      throw new Error("Cerebras returned an unexpected response shape");
+    }
+    const firstChoice = response.choices[0];
+    if (!firstChoice) return null;
+    if ("message" in firstChoice) return firstChoice.message?.content;
+    if ("delta" in firstChoice) return firstChoice.delta?.content;
+    return null;
+  };
+  try {
+    const result = await Promise.any([fetchCerebras(), fetchGroq(), fetchGemini()]);
+    if (!result) throw new Error("Empty response");
+    return result;
+  } catch (error) {
+    console.error("Both APIs failed or returned empty", error);
+    const fallback = await fetchGemini();
+    return fallback;
+  }
+}
+
+// server.ts
+import { randomUUID } from "crypto";
+
+// server/firebase-admin.ts
+import { initializeApp, getApps, cert, applicationDefault } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+if (!getApps().length) {
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const firebaseProjectId = process.env.FIREBASE_PROJECT_ID;
+  if (serviceAccountJson) {
+    let parsedServiceAccount;
+    try {
+      parsedServiceAccount = JSON.parse(serviceAccountJson);
+    } catch (e) {
+      throw new Error(`FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON: ${e.message}`);
+    }
+    if (!parsedServiceAccount.project_id || !parsedServiceAccount.client_email || !parsedServiceAccount.private_key) {
+      throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON is missing required fields (project_id, client_email, private_key).");
+    }
+    if (parsedServiceAccount.private_key.includes("\\n")) {
+      parsedServiceAccount.private_key = parsedServiceAccount.private_key.replace(/\\n/g, "\n");
+    }
+    initializeApp({
+      credential: cert(parsedServiceAccount),
+      projectId: parsedServiceAccount.project_id
+    });
+  } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    initializeApp({
+      credential: applicationDefault(),
+      ...firebaseProjectId ? { projectId: firebaseProjectId } : {}
+    });
+  } else {
+    throw new Error(
+      "Firebase Admin credentials are not configured. Set FIREBASE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS in your environment variables."
+    );
+  }
+}
+var adminAuth = getAuth();
+
+// server/middleware.ts
+import { eq } from "drizzle-orm";
+import jwt from "jsonwebtoken";
+var JWT_SECRET = process.env.JWT_SECRET || "super-secret-guest-key";
+var requireAuth = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized: Missing token" });
+  }
+  const token = authHeader.split("Bearer ")[1];
+  try {
+    const decodedToken = await adminAuth.verifyIdToken(token);
+    req.user = decodedToken;
+    await db.insert(users).values({
+      id: decodedToken.uid,
+      name: decodedToken.name || "Anonymous",
+      email: decodedToken.email,
+      bio: "Cinephile",
+      avatarUrl: decodedToken.picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${decodedToken.uid}`,
+      tasteDna: JSON.stringify({})
+    }).onConflictDoNothing();
+    return next();
+  } catch (error) {
+    const decodedToken = jwt.decode(token, { complete: true });
+    if (decodedToken?.header?.alg !== "HS256") {
+      console.error("Error verifying Firebase ID token:", error);
+      return res.status(401).json({ error: "Unauthorized: Invalid token" });
+    }
+    try {
+      const decodedGuest = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
+      const userExists = (await db.select().from(users).where(eq(users.id, decodedGuest.uid))).at(0);
+      if (!userExists) {
+        return res.status(401).json({ error: "Unauthorized: User not found" });
+      }
+      req.user = decodedGuest;
+      return next();
+    } catch (jwtError) {
+      console.error("Error verifying Firebase ID token and custom JWT:", error, jwtError);
+      return res.status(401).json({ error: "Unauthorized: Invalid token" });
+    }
+  }
+};
+
+// server/tmdb.ts
+import { sql } from "drizzle-orm";
+var TMDB_API_KEY = process.env.TMDB_API_KEY;
+var TMDB_BASE_URL = "https://api.themoviedb.org/3";
+var GENRES = {
+  28: "Action",
+  12: "Adventure",
+  16: "Animation",
+  35: "Comedy",
+  80: "Crime",
+  99: "Documentary",
+  18: "Drama",
+  10751: "Family",
+  14: "Fantasy",
+  36: "History",
+  27: "Horror",
+  10402: "Music",
+  9648: "Mystery",
+  10749: "Romance",
+  878: "Science Fiction",
+  10770: "TV Movie",
+  53: "Thriller",
+  10752: "War",
+  37: "Western"
+};
+async function loadPopularMovies(page = 1) {
+  if (!TMDB_API_KEY) {
+    console.warn("TMDB_API_KEY not set, falling back to local DB only.");
+    return false;
+  }
+  try {
+    const res = await fetch(`${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&language=en-US&page=${page}`);
+    if (!res.ok) {
+      console.error("TMDB error", await res.text());
+      return false;
+    }
+    const data = await res.json();
+    if (data.results && Array.isArray(data.results)) {
+      for (const m of data.results) {
+        if (!m.poster_path) continue;
+        const existing = (await db.execute(sql`SELECT id FROM movies WHERE id = ${m.id.toString()}`)).rows?.[0];
+        if (existing) continue;
+        const year = m.release_date ? parseInt(m.release_date.split("-")[0]) : 0;
+        const genres = (m.genre_ids || []).map((id) => GENRES[id]).filter(Boolean).join(", ");
+        let duration = "120m";
+        try {
+          const detailRes = await fetch(`${TMDB_BASE_URL}/movie/${m.id}?api_key=${TMDB_API_KEY}&language=en-US`);
+          if (detailRes.ok) {
+            const detailData = await detailRes.json();
+            if (detailData.runtime) {
+              duration = `${detailData.runtime}m`;
+            }
+          }
+        } catch (e) {
+          console.error("Failed to fetch movie detail", e);
+        }
+        try {
+          await db.insert(movies).values({
+            id: m.id.toString(),
+            title: m.title,
+            year,
+            genre: genres || "Unknown",
+            duration,
+            synopsis: m.overview || "No synopsis available.",
+            posterUrl: `https://image.tmdb.org/t/p/w500${m.poster_path}`,
+            rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0
+          }).onConflictDoNothing();
+        } catch (e) {
+        }
+      }
+      return true;
+    }
+  } catch (e) {
+    console.error("Failed to load TMDB movies", e);
+  }
+  return false;
+}
+async function searchMovieAndSave(title, yearStr) {
+  if (!TMDB_API_KEY) return null;
+  try {
+    const cleanTitle = title.replace(/\s*[\(\[\{]\d{4}[\)\]\}]\s*$/, "").trim();
+    const cleanYear = yearStr && !isNaN(parseInt(yearStr)) ? parseInt(yearStr).toString() : "";
+    const yearQuery = cleanYear ? `&primary_release_year=${cleanYear}` : "";
+    let res = await fetch(`${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(cleanTitle)}${yearQuery}&language=en-US`);
+    if (!res.ok) return null;
+    let data = await res.json();
+    if ((!data.results || data.results.length === 0) && yearQuery) {
+      res = await fetch(`${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(cleanTitle)}&language=en-US`);
+      if (res.ok) {
+        data = await res.json();
+      }
+    }
+    if (data.results && data.results.length > 0) {
+      const m = data.results.find((item) => item.poster_path) || data.results[0];
+      const year = m.release_date ? parseInt(m.release_date.split("-")[0]) : cleanYear ? parseInt(cleanYear) : 0;
+      const genres = (m.genre_ids || []).map((id) => GENRES[id]).filter(Boolean).join(", ");
+      let duration = "120m";
+      try {
+        const detailRes = await fetch(`${TMDB_BASE_URL}/movie/${m.id}?api_key=${TMDB_API_KEY}&language=en-US`);
+        if (detailRes.ok) {
+          const detailData = await detailRes.json();
+          if (detailData.runtime) {
+            duration = `${detailData.runtime}m`;
+          }
+        }
+      } catch (e) {
+      }
+      const poster_url = m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null;
+      try {
+        await db.insert(movies).values({
+          id: m.id.toString(),
+          title: m.title,
+          year,
+          genre: genres || "Unknown",
+          duration,
+          synopsis: m.overview || "No synopsis available.",
+          posterUrl: poster_url,
+          rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0
+        }).onConflictDoUpdate({
+          target: movies.id,
+          set: {
+            posterUrl: poster_url,
+            title: m.title,
+            year,
+            rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0
+          }
+        });
+      } catch (e) {
+      }
+      return {
+        id: m.id.toString(),
+        title: m.title,
+        year,
+        poster_url,
+        rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0
+      };
+    }
+  } catch (e) {
+    console.error("Failed to search movie", e);
+  }
+  return null;
+}
+
+// server.ts
+import bcrypt from "bcryptjs";
+import jwt2 from "jsonwebtoken";
+var JWT_SECRET2 = process.env.JWT_SECRET || "super-secret-guest-key";
+function createApp() {
+  const app2 = express();
+  app2.use(express.json({ limit: "50mb" }));
+  app2.get("/api/health", async (_req, res) => {
+    const checks = {
+      env: {
+        hasFirebaseServiceAccount: !!process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
+        hasTmdbKey: !!process.env.TMDB_API_KEY,
+        hasGeminiKey: !!process.env.GEMINI_API_KEY || !!process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+        hasJwtSecret: !!process.env.JWT_SECRET,
+        hasDatabaseUrl: !!process.env.DATABASE_URL,
+        nodeEnv: process.env.NODE_ENV,
+        isVercel: !!process.env.VERCEL
+      }
+    };
+    try {
+      await db.execute(sql2`SELECT 1`);
+      checks.database = "ok";
+    } catch (e) {
+      checks.database = `error: ${e.message}`;
+    }
+    res.json(checks);
+  });
+  app2.post("/api/auth/register", async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: "Username and password required" });
+    const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!cleanUsername) return res.status(400).json({ error: "Username must contain alphanumeric characters" });
+    try {
+      const existingUser = (await db.select().from(users).where(eq2(users.name, cleanUsername))).at(0);
+      if (existingUser) {
+        if (!existingUser.password) return res.status(400).json({ error: "Username already taken" });
+        const isValid = await bcrypt.compare(password, existingUser.password);
+        if (isValid) {
+          const token2 = jwt2.sign({ uid: existingUser.id, name: existingUser.name }, JWT_SECRET2, { expiresIn: "30d" });
+          return res.json({ token: token2, user: { uid: existingUser.id, name: existingUser.name } });
+        }
+        return res.status(400).json({ error: "Username already taken" });
+      }
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const userId = `guest_${randomUUID()}`;
+      await db.insert(users).values({
+        id: userId,
+        name: cleanUsername,
+        password: hashedPassword,
+        email: `${cleanUsername}@guest.watchit.com`,
+        bio: "Guest Cinephile",
+        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`,
+        tasteDna: JSON.stringify({})
+      });
+      const token = jwt2.sign({ uid: userId, name: cleanUsername }, JWT_SECRET2, { expiresIn: "30d" });
+      res.json({ token, user: { uid: userId, name: cleanUsername } });
+    } catch (error) {
+      console.error("Register error", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+  app2.post("/api/auth/login", async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: "Username and password required" });
+    const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, "");
+    try {
+      const user = (await db.select().from(users).where(eq2(users.name, cleanUsername))).at(0);
+      if (!user) {
+        return res.status(401).json({ error: "Invalid username or password" });
+      }
+      if (!user.password) return res.status(401).json({ error: "Invalid username or password" });
+      const isValid = await bcrypt.compare(password, user.password);
+      if (!isValid) return res.status(401).json({ error: "Invalid username or password" });
+      const token = jwt2.sign({ uid: user.id, name: user.name }, JWT_SECRET2, { expiresIn: "30d" });
+      res.json({ token, user: { uid: user.id, name: user.name } });
+    } catch (error) {
+      console.error("Login error", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+  app2.get("/api/movies/:id/reviews", requireAuth, async (req, res) => {
+    const { id } = req.params;
+    const TMDB_API_KEY2 = process.env.TMDB_API_KEY;
+    if (!TMDB_API_KEY2) {
+      return res.json([]);
+    }
+    try {
+      const resp = await fetch(`https://api.themoviedb.org/3/movie/${encodeURIComponent(id)}/reviews?api_key=${TMDB_API_KEY2}&language=en-US&page=1`);
+      if (!resp.ok) return res.json([]);
+      const data = await resp.json();
+      if (data.results && data.results.length > 0) {
+        const shortReviews = data.results.filter((r) => r.content && r.content.length <= 250);
+        const reviews = shortReviews.slice(0, 2).map((r) => ({
+          author: r.author,
+          content: r.content
+        }));
+        return res.json(reviews);
+      }
+      res.json([]);
+    } catch (e) {
+      console.error("Error fetching reviews", e);
+      res.json([]);
+    }
+  });
+  app2.get("/api/movies", requireAuth, async (req, res) => {
+    const userId = req.user.uid;
+    const page = parseInt(req.query.page) || 1;
+    try {
+      await loadPopularMovies(page);
+      const moviesResult = await db.execute(sql2`SELECT * FROM movies WHERE id NOT IN (SELECT movie_id FROM swipes WHERE user_id = ${userId}) ORDER BY RANDOM() LIMIT 10`);
+      res.json(moviesResult.rows || moviesResult);
+    } catch (error) {
+      console.error("Get movies error", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+  app2.post("/api/swipe", requireAuth, async (req, res) => {
+    const { movieId, action } = req.body;
+    const userId = req.user.uid;
+    if (!movieId || !action) {
+      return res.status(400).json({ error: "movieId and action are required" });
+    }
+    try {
+      await db.delete(swipes).where(and(eq2(swipes.userId, userId), eq2(swipes.movieId, movieId)));
+      await db.insert(swipes).values({ userId, movieId, action });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Post swipe error", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+  app2.delete("/api/swipe/:movieId", requireAuth, async (req, res) => {
+    const { movieId } = req.params;
+    const userId = req.user.uid;
+    try {
+      await db.delete(swipes).where(and(eq2(swipes.userId, userId), eq2(swipes.movieId, movieId)));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete swipe error", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+  app2.put("/api/swipe/:movieId", requireAuth, async (req, res) => {
+    const { movieId } = req.params;
+    const { action } = req.body;
+    const userId = req.user.uid;
+    try {
+      await db.update(swipes).set({ action }).where(and(eq2(swipes.userId, userId), eq2(swipes.movieId, movieId)));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Put swipe error", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+  app2.get("/api/profile", requireAuth, async (req, res) => {
+    const userId = req.user.uid;
+    try {
+      const user = (await db.select().from(users).where(eq2(users.id, userId))).at(0);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      const historyResult = await db.execute(sql2`SELECT m.*, s.action FROM movies m JOIN swipes s ON m.id = s.movie_id WHERE s.user_id = ${userId} GROUP BY m.id, s.action ORDER BY MAX(s.timestamp) DESC`);
+      const history = historyResult.rows || historyResult;
+      res.json({
+        ...user,
+        avatar_url: user.avatarUrl,
+        taste_dna: user.tasteDna ? JSON.parse(user.tasteDna) : {},
+        history
+      });
+    } catch (error) {
+      console.error("Get profile error", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+  app2.put("/api/profile", requireAuth, async (req, res) => {
+    const userId = req.user.uid;
+    const { name, bio, avatar_url } = req.body;
+    try {
+      await db.update(users).set({ name, bio, avatarUrl: avatar_url }).where(eq2(users.id, userId));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Put profile error", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+  app2.get("/api/conversations", requireAuth, async (req, res) => {
+    const userId = req.user.uid;
+    try {
+      const convos = await db.select().from(conversations).where(eq2(conversations.userId, userId)).orderBy(desc(conversations.updatedAt));
+      res.json(convos);
+    } catch (error) {
+      console.error("Get conversations error", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+  app2.get("/api/conversations/:id", requireAuth, async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user.uid;
+    try {
+      const convo = (await db.select().from(conversations).where(and(eq2(conversations.id, id), eq2(conversations.userId, userId)))).at(0);
+      if (!convo) return res.status(404).json({ error: "Not found" });
+      const msgs = await db.select().from(messages).where(eq2(messages.conversationId, id)).orderBy(messages.timestamp);
+      res.json({ conversation: convo, messages: msgs });
+    } catch (error) {
+      console.error("Get conversation error", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+  app2.post("/api/chat", requireAuth, async (req, res) => {
+    const { query, conversationId } = req.body;
+    const userId = req.user.uid;
+    if (!query) {
+      return res.status(400).json({ error: "Query parameter is required" });
+    }
+    try {
+      const user = (await db.select({ tasteDna: users.tasteDna }).from(users).where(eq2(users.id, userId))).at(0);
+      const historyResult = await db.execute(sql2`SELECT m.title, s.action FROM movies m JOIN swipes s ON m.id = s.movie_id WHERE s.user_id = ${userId} ORDER BY s.timestamp DESC LIMIT 20`);
+      const history = historyResult.rows || historyResult;
+      const historyStr = history.map((h) => `${h.title} (${h.action})`).join(", ");
+      let convId = conversationId;
+      if (!convId) {
+        convId = randomUUID();
+        const title = query.length > 30 ? query.substring(0, 30) + "..." : query;
+        await db.insert(conversations).values({ id: convId, userId, title });
+      } else {
+        await db.execute(sql2`UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ${convId}`);
+      }
+      await db.insert(messages).values({ id: randomUUID(), conversationId: convId, role: "user", content: query });
+      const chatHistoryResult = await db.execute(sql2`SELECT role, content FROM messages WHERE conversation_id = ${convId} ORDER BY timestamp ASC LIMIT 20`);
+      const chatHistory = chatHistoryResult.rows || chatHistoryResult;
+      const chatHistoryStr = chatHistory.map((m) => `${m.role === "user" ? "User" : "Cine Noir"}: ${m.content}`).join("\n\n");
+      let response = await getRecommendations(user?.tasteDna || "", historyStr, query, chatHistoryStr);
+      try {
+        const parsed = JSON.parse(response);
+        if (parsed.recommendations && Array.isArray(parsed.recommendations)) {
+          for (let rec of parsed.recommendations) {
+            const cleanRecTitle = (rec.title || "").replace(/\s*[\(\[\{]\d{4}[\)\]\}]\s*$/, "").trim();
+            let m = (await db.execute(sql2`SELECT id, title, year, poster_url, rating FROM movies WHERE lower(title) = lower(${cleanRecTitle}) OR lower(title) = lower(${rec.title})`)).rows?.[0];
+            if (!m || !m.poster_url) {
+              const searched = await searchMovieAndSave(rec.title, rec.year);
+              if (searched) {
+                m = searched;
+              }
+            }
+            if (m) {
+              rec.movie_id = m.id;
+              rec.poster_url = m.poster_url || m.posterUrl;
+              if (m.title) rec.title = m.title;
+              if (m.year) rec.year = m.year;
+              if (m.rating) rec.rating = m.rating;
+            }
+          }
+          response = JSON.stringify(parsed);
+        }
+      } catch (e) {
+        console.error("Failed to parse recommendations", e);
+      }
+      await db.insert(messages).values({ id: randomUUID(), conversationId: convId, role: "ai", content: response });
+      res.json({ response, conversationId: convId });
+    } catch (error) {
+      console.error("Chat endpoint error", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+  return app2;
+}
+var app = createApp();
+var server_default = app;
+if (!process.env.VERCEL) {
+  async function startLocalServer() {
+    const { createServer: createViteServer } = await import("vite");
+    const portRaw = process.env.PORT ?? "3000";
+    const PORT = Number(portRaw);
+    if (!Number.isInteger(PORT) || PORT <= 0) {
+      throw new Error("PORT must be a positive integer.");
+    }
+    if (process.env.NODE_ENV !== "production") {
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa"
+      });
+      app.use(vite.middlewares);
+    } else {
+      const { default: path } = await import("path");
+      const distPath = path.join(process.cwd(), "dist");
+      const { default: express2 } = await import("express");
+      app.use(express2.static(distPath));
+      app.get("*", (_req, res) => {
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+    }
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
+  startLocalServer().catch(console.error);
+}
+export {
+  app,
+  createApp,
+  server_default as default
+};

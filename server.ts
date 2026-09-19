@@ -322,6 +322,9 @@ export function createApp() {
   return app;
 }
 
+export const app = createApp();
+export default app;
+
 // ─── Local development entrypoint ────────────────────────────────────────────
 // Only runs when executed directly (not imported by Vercel's serverless runtime)
 if (!process.env.VERCEL) {
@@ -333,8 +336,6 @@ if (!process.env.VERCEL) {
     if (!Number.isInteger(PORT) || PORT <= 0) {
       throw new Error("PORT must be a positive integer.");
     }
-
-    const app = createApp();
 
     if (process.env.NODE_ENV !== "production") {
       const vite = await createViteServer({
