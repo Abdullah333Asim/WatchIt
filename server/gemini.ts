@@ -139,24 +139,23 @@ export async function getRecommendations(preferences: string, history: string, q
   try {
     // Race them for the fastest response!
     const result = await Promise.any([fetchCerebras(), fetchGroq(), fetchGemini()]);
-    
-    // Stop the trackers on success
-    endAiTimer();
-    activeAiRequests.dec();
-    
     if (!result) throw new Error("Empty response");
+    
     return result;
+    
   } catch (error) {
-    console.error("Both APIs failed or returned empty", error);
+    console.error("AI Race failed, attempting fallback:", error);
     // Fallback to one more try with Gemini just in case
     const fallback = await fetchGemini();
+    return fallback;
     
-    // Stop the trackers on fallback completion
+  } finally {
+    // THIS is the observability best practice! 
+    // It guarantees the timer stops and the gauge drops to 0 
+    // even if the fallback crashes.
     endAiTimer();
     activeAiRequests.dec();
-    
-    return fallback;
-  }
+  }  
 }
 
 export default ai;

@@ -263,13 +263,79 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "histogram_quantile(0.95, sum(rate(watchit_ai_generation_duration_seconds_bucket[5m])) by (le))",
+                        "expr": "histogram_quantile(0.50, sum(rate(watchit_ai_generation_duration_seconds_bucket[1m])) by (le))",
+                        "instant": false,
+                        "legendFormat": "__auto",
+                        "range": true
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "D"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "cfyq40p7cjsowc"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "histogram_quantile(0.95, sum(rate(watchit_ai_generation_duration_seconds_bucket[1m])) by (le))",
                         "legendFormat": "__auto",
                         "range": true
                       },
                       "version": "v0"
                     },
                     "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "cfyq40p7cjsowc"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "histogram_quantile(0.90, sum(rate(watchit_ai_generation_duration_seconds_bucket[1m])) by (le))",
+                        "instant": false,
+                        "legendFormat": "__auto",
+                        "range": true
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "C"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "cfyq40p7cjsowc"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "histogram_quantile(0.99, sum(rate(watchit_ai_generation_duration_seconds_bucket[1m])) by (le))",
+                        "instant": false,
+                        "legendFormat": "__auto",
+                        "range": true
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "B"
                   }
                 }
               ],
@@ -280,9 +346,9 @@
           "description": "",
           "id": 3,
           "links": [],
-          "title": "AI Latency p95",
+          "title": "AI Latency",
           "vizConfig": {
-            "group": "histogram",
+            "group": "timeseries",
             "kind": "VizConfig",
             "spec": {
               "fieldConfig": {
@@ -291,17 +357,37 @@
                     "mode": "palette-classic"
                   },
                   "custom": {
-                    "fillOpacity": 80,
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.6,
+                    "drawStyle": "line",
+                    "fillOpacity": 0,
                     "gradientMode": "none",
                     "hideFrom": {
                       "legend": false,
                       "tooltip": false,
                       "viz": false
                     },
-                    "lineWidth": 1,
+                    "insertNulls": false,
+                    "lineInterpolation": "smooth",
+                    "lineWidth": 3,
+                    "pointSize": 5,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "auto",
+                    "showValues": false,
+                    "spanNulls": false,
                     "stacking": {
                       "group": "A",
                       "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
                     }
                   },
                   "thresholds": {
@@ -357,13 +443,57 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "watchit_db_query_duration_seconds{quantile=\"0.95\"}",
+                        "expr": "watchit_db_query_duration_seconds{quantile=\"0.50\"}",
+                        "instant": false,
                         "legendFormat": "__auto",
                         "range": true
                       },
                       "version": "v0"
                     },
                     "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "cfyq40p7cjsowc"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "watchit_db_query_duration_seconds{quantile=\"0.90\"}",
+                        "instant": false,
+                        "legendFormat": "__auto",
+                        "range": true
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "B"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "cfyq40p7cjsowc"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "watchit_db_query_duration_seconds{quantile=\"0.95\"}",
+                        "legendFormat": "__auto",
+                        "range": true
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "C"
                   }
                 }
               ],
@@ -374,45 +504,99 @@
           "description": "",
           "id": 4,
           "links": [],
-          "title": "DB Latency p95",
+          "title": "DB Latency",
           "vizConfig": {
-            "group": "histogram",
+            "group": "timeseries",
             "kind": "VizConfig",
             "spec": {
               "fieldConfig": {
                 "defaults": {
                   "color": {
-                    "mode": "palette-classic"
+                    "mode": "palette-classic",
+                    "seriesBy": "max"
                   },
                   "custom": {
-                    "fillOpacity": 80,
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.9,
+                    "drawStyle": "line",
+                    "fillOpacity": 16,
                     "gradientMode": "none",
                     "hideFrom": {
                       "legend": false,
                       "tooltip": false,
                       "viz": false
                     },
-                    "lineWidth": 1,
+                    "insertNulls": false,
+                    "lineInterpolation": "smooth",
+                    "lineStyle": {
+                      "fill": "solid"
+                    },
+                    "lineWidth": 3,
+                    "pointSize": 1,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "always",
+                    "showValues": false,
+                    "spanNulls": false,
                     "stacking": {
                       "group": "A",
                       "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
                     }
                   },
                   "thresholds": {
-                    "mode": "absolute",
+                    "mode": "percentage",
                     "steps": [
                       {
                         "color": "green",
                         "value": 0
                       },
                       {
+                        "color": "#EAB839",
+                        "value": 40
+                      },
+                      {
                         "color": "red",
-                        "value": 80
+                        "value": 60
+                      }
+                    ]
+                  },
+                  "unit": "s"
+                },
+                "overrides": [
+                  {
+                    "__systemRef": "hideSeriesFrom",
+                    "matcher": {
+                      "id": "byNames",
+                      "options": {
+                        "mode": "exclude",
+                        "names": [
+                          "{__name__=\"watchit_db_query_duration_seconds\", instance=\"host.docker.internal:3000\", job=\"watchit-backend\", quantile=\"0.95\"}"
+                        ],
+                        "prefix": "All except:",
+                        "readOnly": true
+                      }
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hideFrom",
+                        "value": {
+                          "legend": false,
+                          "tooltip": true,
+                          "viz": true
+                        }
                       }
                     ]
                   }
-                },
-                "overrides": []
+                ]
               },
               "options": {
                 "legend": {
@@ -445,21 +629,8 @@
                 "name": "panel-1"
               },
               "height": 8,
-              "width": 12,
+              "width": 24,
               "x": 0,
-              "y": 0
-            }
-          },
-          {
-            "kind": "GridLayoutItem",
-            "spec": {
-              "element": {
-                "kind": "ElementReference",
-                "name": "panel-2"
-              },
-              "height": 8,
-              "width": 12,
-              "x": 12,
               "y": 0
             }
           },
@@ -471,8 +642,21 @@
                 "name": "panel-3"
               },
               "height": 8,
-              "width": 12,
+              "width": 15,
               "x": 0,
+              "y": 8
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-2"
+              },
+              "height": 8,
+              "width": 9,
+              "x": 15,
               "y": 8
             }
           },
@@ -483,10 +667,10 @@
                 "kind": "ElementReference",
                 "name": "panel-4"
               },
-              "height": 8,
-              "width": 12,
-              "x": 12,
-              "y": 8
+              "height": 12,
+              "width": 24,
+              "x": 0,
+              "y": 16
             }
           }
         ]
@@ -519,7 +703,7 @@
         "1d"
       ],
       "fiscalYearStartMonth": 0,
-      "from": "now-6h",
+      "from": "now-5m",
       "hideTimepicker": false,
       "timezone": "browser",
       "to": "now"

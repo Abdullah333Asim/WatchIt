@@ -16,7 +16,7 @@ export const activeAiRequests = new client.Gauge({
 export const aiLatencyHistogram = new client.Histogram({
   name: 'watchit_ai_generation_duration_seconds',
   help: 'Time taken for AI APIs to generate a response',
-  buckets: [0.5, 1, 2, 4, 8]
+  buckets: [0.1, 0.5, 1, 2, 3, 5, 8, 10, 15]
 });
 
 export const dbQuerySummary = new client.Summary({
