@@ -72,7 +72,7 @@ To trace a specific request flow or debug an issue, I use the KQL search bar in 
 
 ### 1. Architecture Diagram
 
-![Architecture Diagram](Architecture Diagram.jpeg)
+<img width="1600" height="948" alt="Architecture Diagram" src="https://github.com/user-attachments/assets/a4e1208d-6a4e-4cbc-b382-1daac2642fc5" />
 
 **What each component does, and how they talk to each other**
 *   **React 19 SPA (browser):** The frontend, built with Vite. Calls the backend's `/api/ *` routes over HTTPS and separately opens the Grafana and Kibana UIs so the developer can view dashboards and logs.
