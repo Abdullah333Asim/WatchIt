@@ -3,6 +3,7 @@ import Groq from "groq-sdk";
 import Cerebras from "@cerebras/cerebras_cloud_sdk";
 import dotenv from "dotenv";
 import { activeAiRequests, aiLatencyHistogram } from './metrics';
+import { activeAiRequests, aiLatencyHistogram, aiProviderWins } from './metrics';
 
 dotenv.config();
 
@@ -99,7 +100,7 @@ export async function getRecommendations(preferences: string, history: string, q
           content: prompt
         }
       ],
-      model: "llama3-70b-8192",
+      model: "llama3-8b-8192",
       response_format: { type: "json_object" },
       temperature: 0.7,
     });
@@ -137,16 +138,34 @@ export async function getRecommendations(preferences: string, history: string, q
   const endAiTimer = aiLatencyHistogram.startTimer();
 
   try {
+    // Helper function to tag whoever finishes first
+    const runRace = async (name: string, apiCall: Promise<any>) => {
+      const response = await apiCall;
+      return { provider: name, data: response };
+    };
+
     // Race them for the fastest response!
-    const result = await Promise.any([fetchCerebras(), fetchGroq(), fetchGemini()]);
-    if (!result) throw new Error("Empty response");
+    const winner = await Promise.any([
+      runRace("Cerebras", fetchCerebras()),
+      runRace("Groq", fetchGroq()),
+      runRace("Gemini", fetchGemini())
+    ]);
     
-    return result;
+    if (!winner.data) throw new Error("Empty response");
+
+    // 🏆 Log the winner to Prometheus!
+    aiProviderWins.labels({ provider: winner.provider }).inc();
+    
+    return winner.data;
     
   } catch (error) {
     console.error("AI Race failed, attempting fallback:", error);
     // Fallback to one more try with Gemini just in case
     const fallback = await fetchGemini();
+    
+    // Log Gemini as the winner by default if the fallback succeeds
+    aiProviderWins.labels({ provider: "Gemini_Fallback" }).inc();
+    
     return fallback;
     
   } finally {
@@ -155,7 +174,7 @@ export async function getRecommendations(preferences: string, history: string, q
     // even if the fallback crashes.
     endAiTimer();
     activeAiRequests.dec();
-  }  
+  } 
 }
 
 export default ai;

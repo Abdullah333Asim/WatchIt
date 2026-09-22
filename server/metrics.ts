@@ -1,4 +1,5 @@
 import client from 'prom-client';
+import promClient from 'prom-client';
 
 client.collectDefaultMetrics();
 
@@ -23,4 +24,10 @@ export const dbQuerySummary = new client.Summary({
   name: 'watchit_db_query_duration_seconds',
   help: 'Time taken to fetch data from PostgreSQL',
   percentiles: [0.5, 0.9, 0.95, 0.99]
+});
+
+export const aiProviderWins = new promClient.Counter({
+  name: 'watchit_ai_wins_total',
+  help: 'Tracks which AI provider wins the Promise.any race',
+  labelNames: ['provider']
 });

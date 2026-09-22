@@ -34,12 +34,14 @@ I added a Prometheus client to my Node.js/Express backend and exposed a `/metric
 | `watchit_active_ai_requests` | Tracks how many AI requests are running right now (app metric) | Gauge | Requests | None | `gemini.ts` - wraps the `Promise.any` AI race | `watchit_active_ai_requests` |
 | `watchit_ai_generation_duration_seconds` | Tracks how long the AI takes to respond (app metric) | Histogram | Seconds | `le` (buckets) | `gemini.ts` - times the LLM network request | `histogram_quantile(0.90, sum(rate(watchit_ai_generation_duration_seconds_bucket[1m])) by (le))` |
 | `watchit_db_query_duration_seconds` | Tracks how long PostgreSQL queries take (app metric) | Summary | Seconds | `quantile` | `app.ts` - inside the `/api/profile` GET route | `watchit_db_query_duration_seconds{quantile="0.95"}` |
+| `watchit_ai_wins_total` | Tracks which AI provider is the fastest (business metric) | Counter | Wins | `provider` | `gemini.ts` - inside the `Promise.any` race helper | `sum(watchit_ai_wins_total) by (provider)` |
 
 ### Grafana Charts Explained
 *   **Swipes (Counter):** Shows the total number of user actions, split by the `action` label (for example, comparing how many movies were marked "Watched" versus "Pass").
 *   **Active Requests (Gauge):** Shows in real time how many AI requests are running. It goes up when multiple users ask for recommendations at once and drops back to 0 when things are idle.
-*   **AI Latency p95 (Histogram):** Uses `histogram_quantile` to work out the 95th percentile of AI response times over the last 5 minutes, so we can see how slow the worst-case requests get.
-*   **DB Latency p95 (Summary):** Reads the 95th percentile directly from the Prometheus client to keep an eye on database performance.
+*   **AI Latency p95 (Histogram):** Uses `histogram_quantile` to work out the 90th percentile of AI response times over the last minute, so we can see how slow the worst-case requests get.
+*   **DB Latency p95 (Summary):** Uses the base Summary metric so Grafana can automatically pull and label the p50, p90, and p95 lines to keep an eye on database performance over time.
+*   **AI Race Winners (Pie Chart):** Uses our new counter to display exactly which AI provider (Gemini, Groq, or Cerebras) is currently answering user prompts the fastest.
 
 ### Machine Metrics (Node Exporter)
 
