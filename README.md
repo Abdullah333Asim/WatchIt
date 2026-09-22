@@ -8,58 +8,64 @@ To run this project locally, your machine must have:
 
 - **Node.js** (v18+)
 - **Docker Desktop** (running)
+- **Git**
+
+---
 
 ## Environment Setup (.env)
 
-You must create a `.env` file in the root directory for the application to run.
-
-**Instructor Note:** A fully populated `.env` file (containing the required Database URL, JWT Secret, and Firebase Admin credentials) has been submitted privately via Canvas. Please place that file in the root directory and add your own AI/TMDB API keys to it.
-
-For reference, here is the `.env.example` structure required by the project:
+Create a `.env` file in the root directory with the following:
 
 ```env
-# AI & External APIs (Add your own keys)
+# AI & External APIs (add your own keys)
 GEMINI_API_KEY="your_gemini_api_key_here"
 GROQ_API_KEY="your_groq_api_key_here"
 CEREBRAS_API_KEY="your_cerebras_api_key_here"
 TMDB_API_KEY="your_tmdb_api_key_here"
 
-# Required Core Infrastructure (Backend & Auth)
-DATABASE_URL="your_pooled_postgres_connection_string"
-SQL_SSL="true"
-SQL_SSL_REJECT_UNAUTHORIZED="false"
-APP_URL="http://localhost:3000"
-JWT_SECRET="your_jwt_secret"
-
-# Frontend Firebase Config (public keys, safe to commit - see note below)
-VITE_FIREBASE_API_KEY="your_firebase_api_key"
-VITE_FIREBASE_AUTH_DOMAIN="your_project.firebaseapp.com"
-VITE_FIREBASE_PROJECT_ID="your_project_id"
-VITE_FIREBASE_STORAGE_BUCKET="your_project.firebasestorage.app"
-VITE_FIREBASE_MESSAGING_SENDER_ID="your_sender_id"
-VITE_FIREBASE_APP_ID="your_app_id"
-
-# Backend Firebase Admin (SECRET - do not commit a real value)
-FIREBASE_SERVICE_ACCOUNT_JSON='your_firebase_service_account_json_string'
+# Local database (matches the Docker container started in Step 2 below)
+DATABASE_URL="postgres://myuser:mypassword@127.0.0.1:5433/mydb"
 ```
 
-> **Note on the `VITE_FIREBASE_*` keys:** these are safe to include because Vite bundles anything prefixed `VITE_` directly into the frontend JavaScript, so it's already visible to anyone who opens the browser's dev tools. Firebase's client config is designed to be public; access control is enforced through Firebase security rules, not by hiding these values. `FIREBASE_SERVICE_ACCOUNT_JSON` is different — it's a backend admin credential and should never be committed with a real value.
+No other keys are required. Firebase login is optional — the app runs fully in guest mode without any Firebase configuration.
 
 ---
 
-## 1. Starting the Project
+## 1. Setup and Installation
 
-**Step 1: Start the Observability Stack**
+**Step 1: Clone the Repository**
 
-Open a terminal in the project root and spin up the Docker containers (Prometheus, Grafana, Elasticsearch, Kibana, Filebeat, and Node Exporter):
+```bash
+git clone <your-repository-url>
+cd <your-repository-folder>
+git checkout assignment-1-observability
+```
+
+**Step 2: Start a Local PostgreSQL Container**
+
+Spin up a local database using Docker. (Port `5433` is used, not the default `5432`, to avoid conflicting with any native local Postgres installation.)
+
+```bash
+docker run --name watchit-postgres -e POSTGRES_USER=myuser -e POSTGRES_PASSWORD=mypassword -e POSTGRES_DB=mydb -p 5433:5432 -d postgres:latest
+```
+
+**Step 3: Push the Database Schema**
+
+```bash
+npx drizzle-kit push
+```
+
+**Step 4: Start the Observability Stack**
+
+In the project root, start the Docker containers for Prometheus, Grafana, Elasticsearch, Kibana, Filebeat, and Node Exporter:
 
 ```bash
 docker-compose up -d
 ```
 
-**Step 2: Start the Application**
+**Step 5: Start the Application**
 
-Open a second terminal, install the dependencies, and start the Vite frontend and Express backend:
+In a second terminal, install dependencies and start the frontend and backend:
 
 ```bash
 npm install
@@ -70,10 +76,10 @@ npm run dev
 
 ## 2. Using the Application
 
-Once both the Docker containers and the Node.js server are running, you can access the different interfaces via your browser:
+Once the Docker containers and the Node.js server are running:
 
 - **WatchIt App:** [http://localhost:3000](http://localhost:3000)
-  Log in (or continue as guest) and use the chat interface to ask Cine Noir for a movie recommendation. This will generate metrics and logs.
+  Continue as guest and use the chat interface to ask Cine Noir for a movie recommendation. This generates metrics and logs.
 
 - **Grafana:** [http://localhost:3001](http://localhost:3001)
   Login: `admin` / Password: `admin`
@@ -100,18 +106,33 @@ All backend HTTP requests and errors are structured as JSON using Winston and wr
 **To test:**
 
 1. Open Kibana and navigate to **Discover** (via the side menu).
-2. If prompted, create a Data View with the index pattern `watchit-logs-*` and select `@timestamp` as the time field.
+2. Create a Data View with the index pattern `watchit-logs-*` and select `@timestamp` as the time field.
 3. Filter logs by specific fields — for example, searching `severity: "error"` or tracking a specific `request_id`.
 
 ---
 
-## 4. Safe Clean Up
+## 4. Troubleshooting
 
-To gracefully stop the application and destroy the background monitoring containers and their temporary data, follow these steps:
+**"password authentication failed for user 'myuser'"**
+
+This usually means the Node.js server connected to a pre-existing native PostgreSQL installation on your machine instead of the Docker container.
+
+**The fix:** Confirm your `.env` uses `127.0.0.1:5433`, not `localhost:5432`, and that the Docker container was started with the `-p 5433:5432` flag.
+
+---
+
+## 5. Safe Clean Up
 
 1. **Stop the App:** Press `Ctrl + C` in the terminal running the Node.js server.
-2. **Destroy the Telemetry Stack:** Run the following command to spin down the Docker containers and permanently wipe their attached data volumes (clearing the local Prometheus and Elasticsearch databases):
 
-```bash
-docker-compose down -v
-```
+2. **Destroy the Telemetry Stack:** Spin down the Docker containers and permanently wipe their attached data volumes:
+
+   ```bash
+   docker-compose down -v
+   ```
+
+3. **Destroy the Postgres Container:**
+
+   ```bash
+   docker rm -f watchit-postgres
+   ```

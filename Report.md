@@ -17,12 +17,7 @@ The swipe interface (including keyboard controls on desktop), automatic movie in
 **How to Try It:**
 The live version is deployed here: https://watch-it-rn.vercel.app/
 
-To run the observability setup locally for this assignment:
-1. Clone the repository and switch to the `assignment-1-observability` branch.
-2. Run `npm install` to install the frontend (React/Vite) and backend (Node.js/Express) dependencies.
-3. Set up your local `.env` file with your PostgreSQL connection string and the required API keys (TMDB, Gemini/Groq/Cerebras).
-4. Start the app with `npm run dev`.
-5. Start the monitoring tools with `docker compose up -d`, which spins up Prometheus and Grafana.
+To run the observability setup locally for this assignment, check out the `README.md` file.
 
 ## Part B: Metrics
 
@@ -55,7 +50,7 @@ Rather than building the CPU/memory/disk/network panels by hand, I imported Graf
 
 All panels are automatically scoped to the `HP-ZBook-Local` machine label set in `prometheus.yml`. This is separate from the app metrics above — it's tracking the health of the underlying machine rather than anything about WatchIt itself — but it's useful for spotting cases where the app looks slow because the host machine is under load, not because of a bug in the app.
 
-<img width="1862" height="862" alt="image" src="https://github.com/user-attachments/assets/0b9239a2-7ea5-4a13-9c8b-3b9a1cc9e08a" />
+<img width="1862" height="862" alt="image" src="docs/images/node exporter.png" />
 
 ## Part C: Logs
 
@@ -83,12 +78,12 @@ To trace a specific request or debug a problem, I use the KQL search bar in the 
   "request_id": "47c63250-9b44-4ac1-92ab-adffc6701751"
 }
 ```
-
+4
 ## Part D: System Design
 
 ### 1. Architecture Diagram
 
-<img width="1600" height="948" alt="Architecture Diagram" src="https://github.com/user-attachments/assets/a4e1208d-6a4e-4cbc-b382-1daac2642fc5" />
+<img width="1600" height="948" alt="Architecture Diagram" src="docs/images/Architecture Diagram.jpeg" />
 
 **What each part does, and how they talk to each other**
 *   **React 19 SPA (browser):** The frontend, built with Vite. It calls the backend's `/api/*` routes over HTTPS, and I separately open the Grafana and Kibana pages to check dashboards and logs.
@@ -211,7 +206,7 @@ Under normal conditions (using a mock delay of 2000ms to stand in for a typical 
 
 *Query used:* `histogram_quantile(0.95, sum(rate(watchit_ai_generation_duration_seconds_bucket[1m])) by (le))`
 
-<img width="1405" height="581" alt="WhatsApp Image 2026-09-20 at 5 54 39 PM" src="https://github.com/user-attachments/assets/0539e641-7268-47d4-9194-acf51f362b97" />
+<img width="1405" height="581" alt="WhatsApp Image 2026-09-20 at 5 54 39 PM" src="docs/images/normal.jpeg" />
 
 
 **2. Prediction**
@@ -220,7 +215,7 @@ If I add an artificial 8000ms delay into the route handler, I'd expect the `hist
 **3. Introducing the problem**
 I added `await new Promise(resolve => setTimeout(resolve, 8000));` into `server/gemini.ts` and restarted the backend. As expected, the p95 latency line in Grafana jumped sharply to around 9 seconds, and the gauge climbed to 3 concurrent requests, clearly showing the backlog building up.
 
-<img width="1359" height="408" alt="WhatsApp Image 2026-09-20 at 6 24 00 PM" src="https://github.com/user-attachments/assets/296ff6d7-da8c-41be-bec8-6004dc0cfd9b" />
+<img width="1359" height="408" alt="WhatsApp Image 2026-09-20 at 6 24 00 PM" src="docs/images/spike.jpeg" />
 
 
 **4. Cause and effect**
@@ -229,7 +224,7 @@ This is basically what would happen if an upstream provider like Gemini or Groq 
 **5. Recovery**
 I removed the 8000ms delay from the code, restarted the backend to clear out the stuck requests, and let the traffic script keep running. Within about a minute (matching the `[1m]` rate window in the query), the p95 latency dropped back down to the 3-second baseline, and the gauge cleared out and went back to 0.
 
-<img width="1363" height="390" alt="WhatsApp Image 2026-09-20 at 6 28 16 PM" src="https://github.com/user-attachments/assets/d662586a-5be5-4985-85b1-f66ce7558c91" />
+<img width="1363" height="390" alt="WhatsApp Image 2026-09-20 at 6 28 16 PM" src="docs/images/recovery.jpeg" />
 
 
 ### 2. Cardinality Explosion
@@ -251,7 +246,7 @@ After triggering the route once from the UI, I checked Prometheus to see how man
 *Query used:* `count(watchit_cardinality_test_total)`
 The result was exactly `100`. So instead of incrementing one counter 100 times, Prometheus had actually created 100 completely separate time series from a single request.
 
-<img width="1370" height="863" alt="image" src="https://github.com/user-attachments/assets/75af6275-dcd1-4212-85a1-692e7b512a4e" />
+<img width="1370" height="863" alt="image" src="docs/images/cardinality explosion.jpeg" />
 
 
 **3. Cleanup**

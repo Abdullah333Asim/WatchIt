@@ -14,37 +14,61 @@ const missingFirebaseVars = Object.entries(firebaseConfig)
   .filter(([, value]) => !value)
   .map(([key]) => key);
 
+export let app: any = null;
+export let auth: any = null;
+export let googleAuthProvider: any = null;
+
+export let loginWithGoogle = async () => ({ user: { uid: 'mock' }, token: 'mock' });
+export let registerGuest = async (u: string) => ({ user: { uid: 'mock', displayName: u } });
+export let loginGuest = async (u: string) => ({ user: { uid: 'mock' } });
+export let logout = async () => {};
+
 if (missingFirebaseVars.length > 0) {
-  throw new Error(`Missing Firebase config env vars: ${missingFirebaseVars.join(', ')}`);
+  console.warn(`⚠️ Missing Firebase config. UI running in Mock Guest Mode.`);
+  
+  // Create dummy auth so React doesn't crash
+  auth = {
+    currentUser: { 
+      uid: 'guest-instructor', 
+      displayName: 'Instructor',
+      email: 'instructor@watchit.local',
+      photoURL: 'https://api.dicebear.com/7.x/avataaars/svg?seed=mock',
+      getIdToken: async () => 'mock-token-for-instructor'
+    },
+    onAuthStateChanged: (callback: any) => {
+      callback({ 
+        uid: 'guest-instructor', 
+        displayName: 'Instructor',
+        email: 'instructor@watchit.local',
+        photoURL: 'https://api.dicebear.com/7.x/avataaars/svg?seed=mock',
+        getIdToken: async () => 'mock-token-for-instructor'
+      });
+      return () => {};
+    },
+    signOut: async () => {}
+  };
+} else {
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  googleAuthProvider = new GoogleAuthProvider();
+
+  loginWithGoogle = async () => {
+    const result = await signInWithPopup(auth, googleAuthProvider);
+    const token = await result.user.getIdToken();
+    return { user: result.user, token };
+  };
+
+  registerGuest = async (username: string, password: string) => {
+    const email = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@guest.watchit.com`;
+    const result = await createUserWithEmailAndPassword(auth, email, password);
+    if (result.user) await updateProfile(result.user, { displayName: username }).catch(console.error);
+    return result;
+  };
+
+  loginGuest = async (username: string, password: string) => {
+    const email = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@guest.watchit.com`;
+    return await signInWithEmailAndPassword(auth, email, password);
+  };
+
+  logout = () => signOut(auth);
 }
-
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const googleAuthProvider = new GoogleAuthProvider();
-
-export const loginWithGoogle = async () => {
-  const result = await signInWithPopup(auth, googleAuthProvider);
-  const token = await result.user.getIdToken();
-  return { user: result.user, token };
-};
-
-export const registerGuest = async (username: string, password: string) => {
-  const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (!cleanUsername) throw new Error("Username must contain alphanumeric characters.");
-  const email = `${cleanUsername}@guest.watchit.com`;
-  const result = await createUserWithEmailAndPassword(auth, email, password);
-  if (result.user) {
-    await updateProfile(result.user, { displayName: username }).catch(console.error);
-  }
-  return result;
-};
-
-export const loginGuest = async (username: string, password: string) => {
-  const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (!cleanUsername) throw new Error("Username must contain alphanumeric characters.");
-  const email = `${cleanUsername}@guest.watchit.com`;
-  const result = await signInWithEmailAndPassword(auth, email, password);
-  return result;
-};
-
-export const logout = () => signOut(auth);
