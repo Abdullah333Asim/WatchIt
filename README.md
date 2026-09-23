@@ -1,6 +1,6 @@
-# WatchIt - Assignment 1: Observability
+# WatchIt - Observability
 
-This repository contains the observability implementation for **WatchIt**, an AI-powered movie discovery application.
+This branch contains the observability implementation for **WatchIt**, an AI-powered movie discovery application.
 
 ## Prerequisites
 
@@ -26,7 +26,7 @@ TMDB_API_KEY="your_tmdb_api_key_here"
 DATABASE_URL="postgres://myuser:mypassword@127.0.0.1:5433/mydb"
 ```
 
-No other keys are required. I have optimized the project so that now the Firebase login is optional — the app runs fully in guest mode without any Firebase configuration.
+No other keys are required. This branch has been optimized so that now the Firebase login is optional — the app runs fully in guest mode without any Firebase configuration.
 
 ---
 
@@ -35,8 +35,8 @@ No other keys are required. I have optimized the project so that now the Firebas
 **Step 1: Clone the Repository**
 
 ```bash
-git clone <your-repository-url>
-cd <your-repository-folder>
+git clone <repo url>
+cd <repo folder>
 git checkout assignment-1-observability
 ```
 
