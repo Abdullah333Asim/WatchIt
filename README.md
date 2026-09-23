@@ -8,12 +8,11 @@ The live application is deployed at: **https://watch-it-rn.vercel.app/**
 
 ## 🌟 Key Features
 
-* **Interactive Swipe Matcher**: A fluid, Tinder-style card interface to categorize movies as *Watched*, *Watchlist*, *Pass*, or *Ignore*. Fully supports desktop keyboard navigation (`W`/`A`/`S`/`D` or arrow keys).
-* **Cine Noir AI Chat Assistant**: Speak with *Cine Noir*, a sophisticated film curator operating in a virtual dark theater lobby. Powered by a high-concurrency race between Gemini, Groq, and Cerebras API nodes for rapid response delivery.
-* **Metadata Backfilling**: Integrates directly with the TMDB API to dynamically fetch missing poster paths, rating averages, runtimes, and year indicators on demand.
+* **Interactive Swipe Matcher**: A fluid, doom-scrolling card interface to categorize movies as *Watched*, *Watchlist*, *Pass*, or *Ignore*.
+* **Cine Noir AI Chat Assistant**: Speak with *Cine Noir*, a sophisticated film curator.
+* **Metadata Backfilling**: Integrates directly with the TMDB API to dynamically fetch movie synopsis, rating averages, runtimes, year indicators, and reviews on demand.
 * **Personalized Dashboard & Filtering**: Seamless list management for Watched and Watchlist items with search filters for release year, genre tags, and star ratings.
 * **Premium Accent Themes**: The application dynamically extracts the dominant color from current movie poster cards to generate atmospheric, ambient background glow transitions.
-* **Technical SEO & Social Link Unfurling**: Pre-configured with complete Open Graph (OG) and Twitter Card tags optimized for high-quality preview cards on WhatsApp, Discord, Twitter/X, and Facebook.
 
 ---
 
@@ -25,8 +24,7 @@ The live application is deployed at: **https://watch-it-rn.vercel.app/**
 * **Authentication**: Firebase Authentication (Google OAuth) with a secure guest account fallback option.
 * **APIs**:
   * TMDB API (Movie Metadata and Imagery)
-  * Google Gemini API (`gemini-3-flash-preview`)
-  * Groq API (`llama-3.3-70b-versatile`)
-  * Cerebras Cloud SDK (`llama3.1-70b`)
+  * Google Gemini API (`gemini-3.8-flash`)
+  * OpenRouter API (`meta-llama/llama-3.1-8b-instruct`)
 
 ---
