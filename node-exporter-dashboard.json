@@ -5,15 +5,17 @@
     "name": "rYdddlPWk",
     "namespace": "default",
     "uid": "45a3bead-a7bb-4e9f-9d69-b7746284d7fc",
-    "resourceVersion": "1789822703196005",
-    "generation": 1,
+    "resourceVersion": "1790168519986984",
+    "generation": 2,
     "creationTimestamp": "2026-09-19T12:58:23Z",
     "labels": {
       "grafana.app/deprecatedInternalID": "2617408252502016"
     },
     "annotations": {
       "grafana.app/createdBy": "user:ffyq0q0im3ym8a",
-      "grafana.app/saved-from-ui": "Grafana v13.2.2 (1bea008f7e)"
+      "grafana.app/saved-from-ui": "Grafana v13.2.2 (1bea008f7e)",
+      "grafana.app/updatedBy": "user:ffyq0q0im3ym8a",
+      "grafana.app/updatedTimestamp": "2026-09-23T13:01:59Z"
     }
   },
   "spec": {
@@ -23,7 +25,7 @@
         "spec": {
           "query": {
             "kind": "DataQuery",
-            "group": "datasource",
+            "group": "grafana",
             "version": "v0",
             "datasource": {
               "name": "grafana"
@@ -39,10 +41,7 @@
           "hide": true,
           "iconColor": "rgba(0, 211, 255, 1)",
           "name": "Annotations & Alerts",
-          "builtIn": true,
-          "legacyOptions": {
-            "type": "dashboard"
-          }
+          "builtIn": true
         }
       }
     ],
@@ -2750,7 +2749,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "11.6.1",
+            "version": "13.2.2",
             "spec": {
               "options": {
                 "colorMode": "none",
@@ -2787,7 +2786,7 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "value": null,
+                        "value": 0,
                         "color": "green"
                       }
                     ]
@@ -4189,7 +4188,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "11.6.1",
+            "version": "13.2.2",
             "spec": {
               "options": {
                 "colorMode": "none",
@@ -4227,7 +4226,7 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "value": null,
+                        "value": 0,
                         "color": "green"
                       },
                       {
@@ -4458,7 +4457,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "11.6.1",
+            "version": "13.2.2",
             "spec": {
               "options": {
                 "legend": {
@@ -4482,7 +4481,7 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "value": null,
+                        "value": 0,
                         "color": "green"
                       }
                     ]
@@ -4514,6 +4513,7 @@
                       "type": "linear"
                     },
                     "showPoints": "never",
+                    "showValues": false,
                     "spanNulls": false,
                     "stacking": {
                       "group": "A",
@@ -4573,9 +4573,17 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "11.6.1",
+            "version": "13.2.2",
             "spec": {
               "options": {
+                "barShape": "flat",
+                "barWidthFactor": 0.5,
+                "effects": {
+                  "barGlow": false,
+                  "centerGlow": false,
+                  "gradient": false
+                },
+                "endpointMarker": "point",
                 "minVizHeight": 75,
                 "minVizWidth": 75,
                 "orientation": "auto",
@@ -4586,9 +4594,14 @@
                   "fields": "",
                   "values": false
                 },
+                "segmentCount": 1,
+                "segmentSpacing": 0.3,
+                "shape": "gauge",
                 "showThresholdLabels": false,
                 "showThresholdMarkers": true,
-                "sizing": "auto"
+                "sizing": "auto",
+                "sparkline": false,
+                "textMode": "auto"
               },
               "fieldConfig": {
                 "defaults": {
@@ -4611,7 +4624,7 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "value": null,
+                        "value": 0,
                         "color": "rgba(50, 172, 45, 0.97)"
                       },
                       {
@@ -4677,9 +4690,17 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "11.6.1",
+            "version": "13.2.2",
             "spec": {
               "options": {
+                "barShape": "flat",
+                "barWidthFactor": 0.5,
+                "effects": {
+                  "barGlow": false,
+                  "centerGlow": false,
+                  "gradient": false
+                },
+                "endpointMarker": "point",
                 "minVizHeight": 75,
                 "minVizWidth": 75,
                 "orientation": "auto",
@@ -4690,9 +4711,14 @@
                   "fields": "",
                   "values": false
                 },
+                "segmentCount": 1,
+                "segmentSpacing": 0.3,
+                "shape": "gauge",
                 "showThresholdLabels": false,
                 "showThresholdMarkers": true,
-                "sizing": "auto"
+                "sizing": "auto",
+                "sparkline": false,
+                "textMode": "auto"
               },
               "fieldConfig": {
                 "defaults": {
@@ -4715,7 +4741,7 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "value": null,
+                        "value": 0,
                         "color": "rgba(50, 172, 45, 0.97)"
                       },
                       {
@@ -5249,9 +5275,17 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "11.6.1",
+            "version": "13.2.2",
             "spec": {
               "options": {
+                "barShape": "flat",
+                "barWidthFactor": 0.5,
+                "effects": {
+                  "barGlow": false,
+                  "centerGlow": false,
+                  "gradient": false
+                },
+                "endpointMarker": "point",
                 "minVizHeight": 75,
                 "minVizWidth": 75,
                 "orientation": "auto",
@@ -5262,9 +5296,14 @@
                   "fields": "",
                   "values": false
                 },
+                "segmentCount": 1,
+                "segmentSpacing": 0.3,
+                "shape": "gauge",
                 "showThresholdLabels": false,
                 "showThresholdMarkers": true,
-                "sizing": "auto"
+                "sizing": "auto",
+                "sparkline": false,
+                "textMode": "auto"
               },
               "fieldConfig": {
                 "defaults": {
@@ -5276,7 +5315,7 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "value": null,
+                        "value": 0,
                         "color": "rgba(50, 172, 45, 0.97)"
                       },
                       {
@@ -6051,7 +6090,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "11.6.1",
+            "version": "13.2.2",
             "spec": {
               "options": {
                 "colorMode": "none",
@@ -6089,7 +6128,7 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "value": null,
+                        "value": 0,
                         "color": "green"
                       },
                       {
@@ -6338,9 +6377,17 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "11.6.1",
+            "version": "13.2.2",
             "spec": {
               "options": {
+                "barShape": "flat",
+                "barWidthFactor": 0.5,
+                "effects": {
+                  "barGlow": false,
+                  "centerGlow": false,
+                  "gradient": false
+                },
+                "endpointMarker": "point",
                 "minVizHeight": 75,
                 "minVizWidth": 75,
                 "orientation": "auto",
@@ -6351,9 +6398,14 @@
                   "fields": "",
                   "values": false
                 },
+                "segmentCount": 1,
+                "segmentSpacing": 0.3,
+                "shape": "gauge",
                 "showThresholdLabels": false,
                 "showThresholdMarkers": true,
-                "sizing": "auto"
+                "sizing": "auto",
+                "sparkline": false,
+                "textMode": "auto"
               },
               "fieldConfig": {
                 "defaults": {
@@ -6376,7 +6428,7 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "value": null,
+                        "value": 0,
                         "color": "rgba(50, 172, 45, 0.97)"
                       },
                       {
@@ -6441,9 +6493,17 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "11.6.1",
+            "version": "13.2.2",
             "spec": {
               "options": {
+                "barShape": "flat",
+                "barWidthFactor": 0.5,
+                "effects": {
+                  "barGlow": false,
+                  "centerGlow": false,
+                  "gradient": false
+                },
+                "endpointMarker": "point",
                 "minVizHeight": 75,
                 "minVizWidth": 75,
                 "orientation": "auto",
@@ -6454,9 +6514,14 @@
                   "fields": "",
                   "values": false
                 },
+                "segmentCount": 1,
+                "segmentSpacing": 0.3,
+                "shape": "gauge",
                 "showThresholdLabels": false,
                 "showThresholdMarkers": true,
-                "sizing": "auto"
+                "sizing": "auto",
+                "sparkline": false,
+                "textMode": "auto"
               },
               "fieldConfig": {
                 "defaults": {
@@ -6479,7 +6544,7 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "value": null,
+                        "value": 0,
                         "color": "rgba(50, 172, 45, 0.97)"
                       },
                       {
@@ -7285,7 +7350,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "11.6.1",
+            "version": "13.2.2",
             "spec": {
               "options": {
                 "colorMode": "none",
@@ -7323,7 +7388,7 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "value": null,
+                        "value": 0,
                         "color": "rgba(50, 172, 45, 0.97)"
                       },
                       {
@@ -12722,7 +12787,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "bargauge",
-            "version": "11.6.1",
+            "version": "13.2.2",
             "spec": {
               "options": {
                 "displayMode": "basic",
@@ -12759,7 +12824,7 @@
                     "mode": "percentage",
                     "steps": [
                       {
-                        "value": null,
+                        "value": 0,
                         "color": "green"
                       },
                       {
@@ -18074,7 +18139,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "11.6.1",
+            "version": "13.2.2",
             "spec": {
               "options": {
                 "legend": {
@@ -18096,7 +18161,7 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "value": null,
+                        "value": 0,
                         "color": "green"
                       }
                     ]
@@ -18128,6 +18193,7 @@
                       "type": "linear"
                     },
                     "showPoints": "never",
+                    "showValues": false,
                     "spanNulls": false,
                     "stacking": {
                       "group": "A",
@@ -18201,7 +18267,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "11.6.1",
+            "version": "13.2.2",
             "spec": {
               "options": {
                 "colorMode": "none",
@@ -18239,7 +18305,7 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "value": null,
+                        "value": 0,
                         "color": "green"
                       },
                       {
@@ -18417,7 +18483,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "11.6.1",
+            "version": "13.2.2",
             "spec": {
               "options": {
                 "legend": {
@@ -18441,7 +18507,7 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "value": null,
+                        "value": 0,
                         "color": "green"
                       }
                     ]
@@ -18473,6 +18539,7 @@
                       "type": "linear"
                     },
                     "showPoints": "never",
+                    "showValues": false,
                     "spanNulls": false,
                     "stacking": {
                       "group": "A",
@@ -18699,7 +18766,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "11.6.1",
+            "version": "13.2.2",
             "spec": {
               "options": {
                 "legend": {
@@ -18723,7 +18790,7 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "value": null,
+                        "value": 0,
                         "color": "green"
                       }
                     ]
@@ -18755,6 +18822,7 @@
                       "type": "linear"
                     },
                     "showPoints": "never",
+                    "showValues": false,
                     "spanNulls": false,
                     "stacking": {
                       "group": "A",
@@ -20180,7 +20248,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 710,
+                        "y": 0,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20193,7 +20261,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 710,
+                        "y": 0,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20206,7 +20274,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 910,
+                        "y": 200,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20219,7 +20287,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 910,
+                        "y": 200,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20232,7 +20300,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 920,
+                        "y": 210,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20245,7 +20313,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 920,
+                        "y": 210,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20258,7 +20326,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 930,
+                        "y": 220,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20271,7 +20339,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 930,
+                        "y": 220,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20284,7 +20352,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 940,
+                        "y": 230,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20297,7 +20365,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 940,
+                        "y": 230,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20310,7 +20378,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 950,
+                        "y": 240,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20323,7 +20391,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 950,
+                        "y": 240,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20350,7 +20418,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 710,
+                        "y": 0,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20363,7 +20431,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 710,
+                        "y": 0,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20376,7 +20444,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 890,
+                        "y": 180,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20389,7 +20457,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 890,
+                        "y": 180,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20416,7 +20484,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 710,
+                        "y": 0,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20429,7 +20497,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 710,
+                        "y": 0,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20442,7 +20510,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 860,
+                        "y": 150,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20455,7 +20523,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 860,
+                        "y": 150,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20468,7 +20536,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 870,
+                        "y": 160,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20481,7 +20549,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 870,
+                        "y": 160,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20508,7 +20576,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 710,
+                        "y": 0,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20521,7 +20589,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 710,
+                        "y": 0,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20534,7 +20602,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 740,
+                        "y": 30,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20547,7 +20615,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 740,
+                        "y": 30,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20560,7 +20628,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 750,
+                        "y": 40,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20573,7 +20641,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 750,
+                        "y": 40,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20600,7 +20668,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 790,
+                        "y": 0,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20613,7 +20681,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 790,
+                        "y": 0,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20626,7 +20694,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 800,
+                        "y": 10,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20639,7 +20707,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 800,
+                        "y": 10,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20652,7 +20720,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 810,
+                        "y": 20,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20665,7 +20733,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 810,
+                        "y": 20,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20692,7 +20760,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 710,
+                        "y": 0,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20705,7 +20773,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 710,
+                        "y": 0,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20718,7 +20786,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 720,
+                        "y": 10,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20731,7 +20799,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 720,
+                        "y": 10,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20758,7 +20826,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 4200,
+                        "y": 0,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20771,7 +20839,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 4200,
+                        "y": 0,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20784,7 +20852,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 4210,
+                        "y": 10,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -20797,7 +20865,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 4210,
+                        "y": 10,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -21374,7 +21442,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 130,
+                        "y": 0,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -21387,7 +21455,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 130,
+                        "y": 0,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -21400,7 +21468,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 160,
+                        "y": 30,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -21413,7 +21481,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 160,
+                        "y": 30,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -21426,7 +21494,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 170,
+                        "y": 40,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -21439,7 +21507,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 170,
+                        "y": 40,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -21452,7 +21520,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 180,
+                        "y": 50,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -21465,7 +21533,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 180,
+                        "y": 50,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -21478,7 +21546,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 190,
+                        "y": 60,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -21491,7 +21559,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 190,
+                        "y": 60,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -21504,7 +21572,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 200,
+                        "y": 70,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -21517,7 +21585,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 200,
+                        "y": 70,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -21530,7 +21598,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 210,
+                        "y": 80,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -21543,7 +21611,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 210,
+                        "y": 80,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -21570,7 +21638,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 130,
+                        "y": 0,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -21583,7 +21651,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 12,
-                        "y": 130,
+                        "y": 0,
                         "width": 12,
                         "height": 10,
                         "element": {
@@ -21596,7 +21664,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 0,
-                        "y": 140,
+                        "y": 10,
                         "width": 10,
                         "height": 10,
                         "element": {
@@ -21609,7 +21677,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 10,
-                        "y": 140,
+                        "y": 10,
                         "width": 10,
                         "height": 10,
                         "element": {
@@ -21622,7 +21690,7 @@
                       "kind": "GridLayoutItem",
                       "spec": {
                         "x": 20,
-                        "y": 140,
+                        "y": 10,
                         "width": 4,
                         "height": 10,
                         "element": {
@@ -21672,9 +21740,9 @@
     ],
     "timeSettings": {
       "timezone": "browser",
-      "from": "now-24h",
+      "from": "now-5m",
       "to": "now",
-      "autoRefresh": "1m",
+      "autoRefresh": "5s",
       "autoRefreshIntervals": [
         "5s",
         "10s",
@@ -21700,8 +21768,8 @@
           "refresh": "onDashboardLoad",
           "regex": "",
           "current": {
-            "text": "",
-            "value": ""
+            "text": "prometheus",
+            "value": "cfyq40p7cjsowc"
           },
           "options": [],
           "multi": false,
@@ -21717,8 +21785,8 @@
         "spec": {
           "name": "job",
           "current": {
-            "text": "",
-            "value": ""
+            "text": "node-exporter",
+            "value": "node-exporter"
           },
           "label": "Job",
           "hide": "dontHide",
@@ -21737,6 +21805,7 @@
             }
           },
           "regex": "",
+          "regexApplyTo": "value",
           "sort": "alphabeticalAsc",
           "definition": "",
           "options": [],
@@ -21750,8 +21819,8 @@
         "spec": {
           "name": "nodename",
           "current": {
-            "text": "",
-            "value": ""
+            "text": "9d149975b12d",
+            "value": "9d149975b12d"
           },
           "label": "Nodename",
           "hide": "dontHide",
@@ -21770,6 +21839,7 @@
             }
           },
           "regex": "",
+          "regexApplyTo": "value",
           "sort": "alphabeticalAsc",
           "definition": "label_values(node_uname_info{job=\"$job\"}, nodename)",
           "options": [],
@@ -21783,8 +21853,8 @@
         "spec": {
           "name": "node",
           "current": {
-            "text": "",
-            "value": ""
+            "text": "node-exporter:9100",
+            "value": "node-exporter:9100"
           },
           "label": "Instance",
           "hide": "dontHide",
@@ -21803,6 +21873,7 @@
             }
           },
           "regex": "",
+          "regexApplyTo": "value",
           "sort": "alphabeticalAsc",
           "definition": "label_values(node_uname_info{job=\"$job\", nodename=\"$nodename\"}, instance)",
           "options": [],

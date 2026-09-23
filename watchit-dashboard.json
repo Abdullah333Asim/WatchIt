@@ -5,8 +5,8 @@
     "name": "addrz6z",
     "namespace": "default",
     "uid": "1a7487f2-11f2-4073-8b2b-c58109355ab4",
-    "resourceVersion": "1790079393372000",
-    "generation": 30,
+    "resourceVersion": "1790169202949001",
+    "generation": 31,
     "creationTimestamp": "2026-09-19T12:43:04Z",
     "labels": {
       "grafana.app/deprecatedInternalID": "2613553550245888"
@@ -15,7 +15,7 @@
       "grafana.app/createdBy": "user:ffyq0q0im3ym8a",
       "grafana.app/saved-from-ui": "Grafana v13.2.2 (1bea008f7e)",
       "grafana.app/updatedBy": "user:ffyq0q0im3ym8a",
-      "grafana.app/updatedTimestamp": "2026-09-22T12:16:33Z"
+      "grafana.app/updatedTimestamp": "2026-09-23T13:13:22Z"
     }
   },
   "spec": {
@@ -428,7 +428,7 @@
                     },
                     "showPoints": "always",
                     "showValues": false,
-                    "spanNulls": false,
+                    "spanNulls": true,
                     "stacking": {
                       "group": "A",
                       "mode": "none"
@@ -736,7 +736,7 @@
     "tags": [],
     "timeSettings": {
       "timezone": "browser",
-      "from": "now-30m",
+      "from": "now-15m",
       "to": "now",
       "autoRefresh": "5s",
       "autoRefreshIntervals": [
