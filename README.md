@@ -1,6 +1,6 @@
 # WatchIt - Assignment 1: Observability
 
-This repository contains the observability implementation for **WatchIt**, an AI-powered movie discovery application. This project was completed for Assignment 1: Observability (Enterprise Software Development).
+This repository contains the observability implementation for **WatchIt**, an AI-powered movie discovery application.
 
 ## Prerequisites
 
@@ -19,15 +19,14 @@ Create a `.env` file in the root directory with the following:
 ```env
 # AI & External APIs (add your own keys)
 GEMINI_API_KEY="your_gemini_api_key_here"
-GROQ_API_KEY="your_groq_api_key_here"
-CEREBRAS_API_KEY="your_cerebras_api_key_here"
+OPENROUTER_API_KEY="your_openrouter_api_key_here"
 TMDB_API_KEY="your_tmdb_api_key_here"
 
 # Local database (matches the Docker container started in Step 2 below)
 DATABASE_URL="postgres://myuser:mypassword@127.0.0.1:5433/mydb"
 ```
 
-No other keys are required. Firebase login is optional — the app runs fully in guest mode without any Firebase configuration.
+No other keys are required. I have optimized the project so that now the Firebase login is optional — the app runs fully in guest mode without any Firebase configuration.
 
 ---
 
@@ -41,7 +40,13 @@ cd <your-repository-folder>
 git checkout assignment-1-observability
 ```
 
-**Step 2: Start a Local PostgreSQL Container**
+**Step 2: Install Dependencies**
+
+```bash
+npm install
+```
+
+**Step 3: Start a Local PostgreSQL Container**
 
 Spin up a local database using Docker. (Port `5433` is used, not the default `5432`, to avoid conflicting with any native local Postgres installation.)
 
@@ -49,13 +54,13 @@ Spin up a local database using Docker. (Port `5433` is used, not the default `54
 docker run --name watchit-postgres -e POSTGRES_USER=myuser -e POSTGRES_PASSWORD=mypassword -e POSTGRES_DB=mydb -p 5433:5432 -d postgres:latest
 ```
 
-**Step 3: Push the Database Schema**
+**Step 4: Push the Database Schema**
 
 ```bash
 npx drizzle-kit push
 ```
 
-**Step 4: Start the Observability Stack**
+**Step 5: Start the Observability Stack**
 
 In the project root, start the Docker containers for Prometheus, Grafana, Elasticsearch, Kibana, Filebeat, and Node Exporter:
 
@@ -63,12 +68,11 @@ In the project root, start the Docker containers for Prometheus, Grafana, Elasti
 docker-compose up -d
 ```
 
-**Step 5: Start the Application**
+**Step 6: Start the Application**
 
-In a second terminal, install dependencies and start the frontend and backend:
+Start the frontend and backend:
 
 ```bash
-npm install
 npm run dev
 ```
 

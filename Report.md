@@ -9,7 +9,7 @@ Finding the right movie to watch is often a hassle. You end up scrolling endless
 Movie fans and casual viewers who want an easier, more interactive way to find new films, keep track of what they want to watch, and get recommendations that are actually personalized to them.
 
 **The Solution:**
-WatchIt is an AI-powered movie recommendation app (a Single Page Application). It has a doom-scrolling swiping interface where users can mark movies as Watched, Watchlist, Pass, or Ignore. The main feature is "Cine Noir," an AI chat assistant that sends the same request to three different AI providers (Gemini, Groq, and Cerebras) at once and uses whichever one replies first. It looks at the user's swipe history stored in PostgreSQL to give recommendations that fit their taste.
+WatchIt is an AI-powered movie recommendation app (a Single Page Application). It has a doom-scrolling swiping interface where users can mark movies as Watched, Watchlist, Pass, or Ignore. The main feature is "Cine Noir," an AI chat assistant that sends the same request to two different AI providers (Gemini and OpenRouter) at once and uses whichever one replies first. If both providers fail or are unavailable, the app falls back to a small set of hardcoded recommendations ("Local Vault") so the feature never fully breaks. It looks at the user's swipe history stored in PostgreSQL to give recommendations that fit their taste.
 
 **What Works:**
 The swipe interface (including keyboard controls on desktop), automatic movie info fetching from TMDB, a filterable personal dashboard, login through Firebase, and the full AI chat feature all work and are connected to the PostgreSQL database through Drizzle ORM.
@@ -29,14 +29,14 @@ I added a Prometheus client to my Node.js/Express backend and exposed a `/metric
 | `watchit_active_ai_requests` | Tracks how many AI requests are running right now (app metric) | Gauge | Requests | None | `gemini.ts` - wraps the `Promise.any` AI race | `watchit_active_ai_requests` |
 | `watchit_ai_generation_duration_seconds` | Tracks how long the AI takes to respond (app metric) | Histogram | Seconds | `le` (buckets) | `gemini.ts` - times the LLM network request | `histogram_quantile(0.90, sum(rate(watchit_ai_generation_duration_seconds_bucket[1m])) by (le))` |
 | `watchit_db_query_duration_seconds` | Tracks how long PostgreSQL queries take (app metric) | Summary | Seconds | `quantile` | `app.ts` - inside the `/api/profile` GET route | `watchit_db_query_duration_seconds{quantile="0.95"}` |
-| `watchit_ai_wins_total` | Tracks which AI provider is the fastest (business metric) | Counter | Wins | `provider` | `gemini.ts` - inside the `Promise.any` race helper | `sum(watchit_ai_wins_total) by (provider)` |
+| `watchit_ai_wins_total` | Tracks which AI provider is the fastest, including local fallbacks (business metric) | Counter | Wins | `provider` | `gemini.ts` - inside the `Promise.any` race helper | `sum(watchit_ai_wins_total) by (provider)` |
 
 ### Grafana Charts Explained
 *   **Swipes (Counter):** Shows the total number of user actions, split by the `action` label (for example, comparing how many movies were marked "Watched" versus "Pass").
 *   **Active Requests (Gauge):** Shows in real time how many AI requests are running. It goes up when multiple users ask for recommendations at once and drops back to 0 when things are idle.
 *   **AI Latency p95 (Histogram):** Uses `histogram_quantile` to work out the 90th percentile of AI response times over the last minute, so we can see how slow the worst-case requests get.
 *   **DB Latency p95 (Summary):** Uses the base Summary metric so Grafana can automatically pull and label the p50, p90, and p95 lines to keep an eye on database performance over time.
-*   **AI Race Winners (Pie Chart):** Uses our new counter to display exactly which AI provider (Gemini, Groq, or Cerebras) is currently answering user prompts the fastest.
+*   **AI Race Winners (Pie Chart):** Uses our new counter to display which source answered user prompts — either the faster of the two live providers (`Gemini` or `OpenRouter`), or `Local_Vault` on the rare occasions both live providers fail and the app falls back to its offline recommendations.
 
 ### Machine Metrics (Node Exporter)
 
@@ -78,7 +78,7 @@ To trace a specific request or debug a problem, I use the KQL search bar in the 
   "request_id": "47c63250-9b44-4ac1-92ab-adffc6701751"
 }
 ```
-4
+
 ## Part D: System Design
 
 ### 1. Architecture Diagram
@@ -89,7 +89,7 @@ To trace a specific request or debug a problem, I use the KQL search bar in the 
 *   **React 19 SPA (browser):** The frontend, built with Vite. It calls the backend's `/api/*` routes over HTTPS, and I separately open the Grafana and Kibana pages to check dashboards and logs.
 *   **Node.js 22 / Express 4 backend (runs on the host machine, not in Docker):** `app.ts` has all the app's routes, the Winston logger, and the `prom-client` metrics setup that serves `GET /metrics`. It runs directly on the host on port 3000 instead of in Docker so I keep hot-reloading while developing.
 *   **PostgreSQL (external, hosted):** The only place all app data is permanently stored — users, movies, swipes, conversations, messages — reached through a SQL connection via Drizzle ORM using `DATABASE_URL`.
-*   **TMDB / Gemini / Groq / Cerebras APIs (external):** TMDB supplies movie details; the three AI providers are called at the same time with `Promise.any()` in `server/gemini.ts`, and only the fastest response is actually used.
+*   **TMDB / Gemini / OpenRouter APIs (external):** TMDB supplies movie details; the two AI providers are called at the same time with `Promise.any()` in `server/gemini.ts`, and only the fastest response is actually used. If both fail, the app returns a small set of hardcoded fallback recommendations instead of erroring out.
 *   **Filebeat (container):** Watches `logs/app.log` through a read-only Docker volume mount (`./logs -> /app-logs`), reads each line as NDJSON, and sends the parsed entries to Elasticsearch over HTTP. Filebeat is the one that pushes the data — it starts the connection as soon as new lines show up.
 *   **Elasticsearch (container):** Stores and indexes the logs Filebeat sends it, under a index that rotates daily: `watchit-logs-YYYY.MM.dd`.
 *   **Kibana (container):** Lets me search and filter logs stored in Elasticsearch using the `watchit-logs-*` index pattern.
@@ -109,7 +109,7 @@ To trace a specific request or debug a problem, I use the KQL search bar in the 
 | :--- | :--- |
 | **PostgreSQL** | Every `/api/*` route that touches the database returns a 500 error. Login still works, but the user's data can't be saved or read. This is the only part of the monitoring setup that would actually be noticeable to users. |
 | **TMDB API** | Movie discovery falls back to whatever's already in the database; new movies stop being added, and poster/rating info on AI recommendations is just skipped. |
-| **One of Gemini / Groq / Cerebras** | No real impact — `Promise.any()` just uses whichever of the other two responds first. Chat only breaks if all three are down, in which case the code tries Gemini one more time before giving up and returning a 500. |
+| **Gemini or OpenRouter** | No real impact — `Promise.any()` just uses whichever of the two responds first. If both are down or fail, the app doesn't error out — it falls back to a small set of hardcoded recommendations ("Local Vault") so the chat feature still returns something usable. |
 | **Prometheus** | No new metrics get collected while it's down, so Grafana shows a gap for that time. The app itself keeps running fine — `/metrics` is still there, just nobody's reading it. |
 | **Grafana** | Dashboards become unreachable, but Prometheus keeps collecting and storing data in the background. Nothing is lost, it's just not viewable until Grafana comes back. |
 | **Node Exporter** | System stats like CPU, memory, disk, and network stop updating. App metrics aren't affected since they come from a different source. |
@@ -117,22 +117,36 @@ To trace a specific request or debug a problem, I use the KQL search bar in the 
 | **Elasticsearch** | Filebeat's requests fail and it keeps retrying; Kibana stops working since it has nothing to search. The app's own logging to `app.log` isn't affected at all. |
 | **Kibana** | Log search becomes unavailable, but the data in Elasticsearch is safe and untouched; the app itself is unaffected. |
 
-Basically, the entire monitoring setup (Prometheus, Grafana, Node Exporter, Filebeat, Elasticsearch, Kibana) can go down without the app itself breaking for users — it's purely there to watch what's happening. The only things that actually matter to users if they go down are PostgreSQL, and, for the chat feature, all three AI providers failing at the same time.
+Basically, the entire monitoring setup (Prometheus, Grafana, Node Exporter, Filebeat, Elasticsearch, Kibana) can go down without the app itself breaking for users — it's purely there to watch what's happening. PostgreSQL is the only dependency that's directly noticeable to users if it goes down; even both AI providers failing at once doesn't break the chat feature, since the Local Vault fallback keeps it usable.
 
 ### 2. Following a Metric and a Log
 
 **Following a metric: `watchit_ai_generation_duration_seconds`**
-This histogram tracks how long the AI chat takes to come back with a recommendation — basically the time spent waiting on the `Promise.any()` race between Gemini, Groq, and Cerebras.
+This histogram tracks how long the AI chat takes to come back with a recommendation — basically the time spent waiting on the `Promise.any()` race between Gemini and OpenRouter.
 
-*   **Step 1 — The code updates it:** In `server/gemini.ts`, a timer starts right before the race begins and stops as soon as it finishes:
+*   **Step 1 — The code updates it:** In `server/gemini.ts`, a timer starts right before the race begins (`activeAiRequests.inc()` and `aiLatencyHistogram.startTimer()`) and stops in a `finally` block once it resolves, whether the race succeeds or falls back:
     ```typescript
-    const endTimer = aiLatencyHistogram.startTimer();
-    const result = await Promise.any([
-      fetchCerebras(prompt), fetchGroq(prompt), fetchGemini(prompt)
-    ]);
-    endTimer(); // records how long it took, into the right bucket
+    activeAiRequests.inc();
+    const endAiTimer = aiLatencyHistogram.startTimer();
+
+    try {
+      const winner = await Promise.any([
+        runRace("Gemini", fetchGemini()),
+        runRace("OpenRouter", fetchOpenRouter("meta-llama/llama-3.1-8b-instruct"))
+      ]);
+      aiProviderWins.labels({ provider: winner.provider }).inc();
+      return winner.data;
+    } catch (error) {
+      const fallbackData = await fetchLocalVault();
+      aiProviderWins.labels({ provider: "Local_Vault" }).inc();
+      return fallbackData;
+    } finally {
+      endAiTimer(); // records how long it took, into the right bucket
+      activeAiRequests.dec();
+    }
     ```
-    The histogram is set up in `server/metrics.ts` with buckets at [0.5, 1, 2, 4, 8] seconds. So if a chat request takes 1.3 seconds, `endTimer()` adds 1 to the count for the 2s, 4s, and 8s buckets (since 1.3s fits under all of those), and also adds 1 to `watchit_ai_generation_duration_seconds_count` and 1.3 to `..._sum`.
+    Using `finally` means the timer stops and the histogram records a value no matter which path is taken — a fast provider win, a slow provider win, or a full fallback to the Local Vault. This is deliberate: without it, the metric would only reflect successful races and silently miss the (slower, ~800ms simulated) fallback case entirely.
+    The histogram is set up in `server/metrics.ts` with buckets at [0.1, 0.5, 1, 2, 3, 5, 8, 10, 15] seconds. So if a chat request takes 1.3 seconds, `endTimer()` adds 1 to the count for the 2s, 3s, 5s, 8s, 10s, and 15s buckets (since 1.3s fits under all of those), and also adds 1 to `watchit_ai_generation_duration_seconds_count` and 1.3 to `..._sum`.
 
 *   **Step 2 — Prometheus collects and stores it:** Every 5 seconds (`scrape_interval: 5s` in `prometheus.yml`), Prometheus sends a GET request to `host.docker.internal:3000/metrics` and reads the current bucket counts as plain text, for example:
     ```text
@@ -151,7 +165,7 @@ This histogram tracks how long the AI chat takes to come back with a recommendat
     ```promql
     histogram_quantile(0.90, sum(rate(watchit_ai_generation_duration_seconds_bucket[1m])) by (le))
     ```
-    `rate(...[1m])` converts the raw bucket counts into a per-second rate over the last 1 minute, and `histogram_quantile(0.90, ...)` estimates the value under which 90% of AI response times fall. The panel draws this as a line over time, so if Gemini and Groq both slow down and only Cerebras stays fast, that shows up right away as the p90 line climbing.
+    `rate(...[1m])` converts the raw bucket counts into a per-second rate over the last 1 minute, and `histogram_quantile(0.90, ...)` estimates the value under which 90% of AI response times fall. The panel draws this as a line over time, so if Gemini slows down and only OpenRouter stays fast, that shows up right away as the p90 line climbing.
 
 **Following a log: the incoming-request log line**
 This is the log that gets written for every single HTTP request the backend receives.
@@ -219,7 +233,7 @@ I added `await new Promise(resolve => setTimeout(resolve, 8000));` into `server/
 
 
 **4. Cause and effect**
-This is basically what would happen if an upstream provider like Gemini or Groq had network problems or was just slow to respond. From a user's point of view, the app would seem to freeze for over 8 seconds every time they interacted with it — a pretty bad experience. Since no `500` errors are thrown, normal error logging wouldn't catch this at all, which is exactly why having latency histograms and in-flight request gauges matters.
+This is basically what would happen if an upstream provider like Gemini or OpenRouter had network problems or was just slow to respond. From a user's point of view, the app would seem to freeze for over 8 seconds every time they interacted with it — a pretty bad experience. Since no `500` errors are thrown, normal error logging wouldn't catch this at all, which is exactly why having latency histograms and in-flight request gauges matters.
 
 **5. Recovery**
 I removed the 8000ms delay from the code, restarted the backend to clear out the stuck requests, and let the traffic script keep running. Within about a minute (matching the `[1m]` rate window in the query), the p95 latency dropped back down to the 3-second baseline, and the gauge cleared out and went back to 0.
