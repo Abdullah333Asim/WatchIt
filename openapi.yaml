@@ -1,0 +1,509 @@
+openapi: 3.1.0
+info:
+  title: WatchIt Movie Discovery & AI Curator API
+  version: 2.0.0
+  description: >
+    REST-oriented HTTP API for WatchIt (Enterprise Software Development — Assignment 2).
+    Supports guest authentication, movie discovery, idempotent and rate-limited movie swipes,
+    user profile management, and AI-powered recommendations via Cine Noir.
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+
+tags:
+  - name: Auth
+    description: Guest registration and JWT authentication
+  - name: Movies
+    description: Movie catalog discovery
+  - name: Swipes
+    description: User movie swipe interactions (Watched, Watchlist, Pass, Not Interested, Ignore)
+  - name: Profile
+    description: Authenticated user profile and swipe history
+  - name: Chat
+    description: Cine Noir AI recommendation conversations
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, detail, instance]
+      properties:
+        type:
+          type: string
+          examples: ["https://watchit.local/problems/invalid-swipe-action"]
+        title:
+          type: string
+          examples: ["Bad Request"]
+        status:
+          type: integer
+          examples: [400]
+        detail:
+          type: string
+          examples: ['Field "action" must be one of: Watched, Watchlist, Pass, Not Interested, Ignore.']
+        error:
+          type: string
+        instance:
+          type: string
+          examples: ["/api/swipes"]
+        request_id:
+          type: string
+          format: uuid
+
+    AuthRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 30
+          examples: ["cinephile42"]
+        password:
+          type: string
+          minLength: 4
+          examples: ["secret123"]
+
+    AuthResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+        user:
+          type: object
+          properties:
+            uid:
+              type: string
+            name:
+              type: string
+
+    Movie:
+      type: object
+      required: [id, title]
+      properties:
+        id:
+          type: string
+          examples: ["27205"]
+        title:
+          type: string
+          examples: ["Inception"]
+        year:
+          type: integer
+          examples: [2010]
+        genre:
+          type: string
+          examples: ["Action, Sci-Fi"]
+        duration:
+          type: string
+          examples: ["148m"]
+        synopsis:
+          type: string
+        poster_url:
+          type: string
+        rating:
+          type: number
+          examples: [8.8]
+
+    SwipeRequest:
+      type: object
+      required: [movieId, action]
+      properties:
+        movieId:
+          type: string
+          description: Unique TMDB or internal movie identifier
+          examples: ["27205"]
+        action:
+          type: string
+          enum: [Watched, Watchlist, Pass, Not Interested, Ignore]
+          examples: ["Watched"]
+
+    SwipeUpdateRequest:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [Watched, Watchlist, Pass, Not Interested, Ignore]
+          examples: ["Watchlist"]
+
+    SwipeRecord:
+      type: object
+      required: [userId, movieId, action]
+      properties:
+        userId:
+          type: string
+        movieId:
+          type: string
+        action:
+          type: string
+          enum: [Watched, Watchlist, Pass, Not Interested, Ignore]
+        timestamp:
+          type: string
+          format: date-time
+
+    SwipeResponse:
+      type: object
+      required: [success, swipe, idempotent_replay]
+      properties:
+        success:
+          type: boolean
+          examples: [true]
+        swipe:
+          $ref: "#/components/schemas/SwipeRecord"
+        idempotent_replay:
+          type: boolean
+          examples: [false]
+
+    ProfileUpdateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 60
+          examples: ["Abdullah"]
+        bio:
+          type: string
+          maxLength: 300
+          examples: ["Sci-Fi & Neo-Noir enthusiast"]
+        avatar_url:
+          type: string
+
+    ChatRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          maxLength: 500
+          examples: ["Recommend a dark cerebral thriller like Prisoners"]
+        conversationId:
+          type: [string, "null"]
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a guest user account
+      operationId: registerGuest
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthRequest"
+      responses:
+        "201":
+          description: New guest user created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "200":
+          description: Existing guest user authenticated idempotently
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid username or password format
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Username already taken
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate an existing guest user
+      operationId: loginGuest
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Missing username or password
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Invalid username or password
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /api/movies:
+    get:
+      tags: [Movies]
+      summary: Fetch a batch of unswiped movies for discovery
+      operationId: listMovies
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: TMDB catalog page number (1 to 500)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 1
+      responses:
+        "200":
+          description: Array of movie representations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Movie"
+        "400":
+          description: Invalid page parameter
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing or invalid Bearer token
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /api/swipes:
+    get:
+      tags: [Swipes]
+      summary: List recorded movie swipes for the authenticated user
+      operationId: listSwipes
+      parameters:
+        - name: action
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [Watched, Watchlist, Pass, Not Interested, Ignore]
+      responses:
+        "200":
+          description: User swipe collection
+        "400":
+          description: Invalid action query filter
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+    post:
+      tags: [Swipes]
+      summary: Record a movie swipe (Idempotent & Rate-Limited)
+      operationId: recordSwipe
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Optional unique key to safely retry without duplicate side effects
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SwipeRequest"
+      responses:
+        "201":
+          description: New movie swipe created
+          headers:
+            Location:
+              description: URI of the created swipe resource
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SwipeResponse"
+        "200":
+          description: Existing swipe updated or replayed idempotently
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SwipeResponse"
+        "400":
+          description: Validation error (missing movieId or unsupported action)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limit exceeded (8 requests per 15 seconds)
+          headers:
+            Retry-After:
+              description: Seconds until the rate-limit window resets
+              schema:
+                type: integer
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /api/swipes/{movieId}:
+    patch:
+      tags: [Swipes]
+      summary: Update the action for an existing movie swipe
+      operationId: updateSwipe
+      parameters:
+        - name: movieId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SwipeUpdateRequest"
+      responses:
+        "200":
+          description: Swipe updated
+        "400":
+          description: Invalid action
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Swipe not found for this movieId
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+    delete:
+      tags: [Swipes]
+      summary: Delete a movie swipe (Idempotent)
+      operationId: deleteSwipe
+      parameters:
+        - name: movieId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Swipe deleted
+
+  /api/profile:
+    get:
+      tags: [Profile]
+      summary: Get the authenticated user's profile and swipe history
+      operationId: getProfile
+      responses:
+        "200":
+          description: User profile object with swipe history
+        "404":
+          description: User not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+    put:
+      tags: [Profile]
+      summary: Update the authenticated user's profile
+      operationId: updateProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdateRequest"
+      responses:
+        "200":
+          description: Profile updated
+        "400":
+          description: Validation error on name or bio
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /api/conversations:
+    get:
+      tags: [Chat]
+      summary: List AI chat conversations
+      operationId: listConversations
+      responses:
+        "200":
+          description: Array of conversations
+
+  /api/conversations/{id}:
+    get:
+      tags: [Chat]
+      summary: Get messages for a specific conversation
+      operationId: getConversationById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Conversation details and message list
+        "404":
+          description: Conversation not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /api/chat:
+    post:
+      tags: [Chat]
+      summary: Ask Cine Noir for personalized movie recommendations
+      operationId: postChatMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+      responses:
+        "200":
+          description: AI curator response and recommendations
+        "400":
+          description: Empty or overly long query
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"

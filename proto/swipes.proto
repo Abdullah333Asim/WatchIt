@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package watchit.swipes.v1;
+
+service SwipeService {
+  // Unary RPC to record a movie swipe
+  rpc RecordSwipe (SwipeRequest) returns (SwipeResponse);
+}
+
+message SwipeRequest {
+  string movie_id = 1;
+  string action = 2;
+  string request_id = 3;  // Passed for trace correlation
+  string user_id = 4;     // Extracted from auth in a real gateway, passed directly here for simplicity
+}
+
+message SwipeResponse {
+  bool success = 1;
+  string movie_id = 2;
+  string action = 3;
+  bool idempotent_replay = 4;
+}

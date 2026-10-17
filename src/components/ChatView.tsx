@@ -83,7 +83,7 @@ const MessageContent = ({ content, existingWatchlistIds }: { content: string, ex
   const handleAddWatchlist = async (movieId: string) => {
     if (!movieId || addedIds.has(movieId)) return;
     try {
-      await fetchWithUser('/api/swipe', {
+      await fetchWithUser('/api/swipes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ movieId, action: 'Watchlist' })

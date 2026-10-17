@@ -42,7 +42,7 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
 
   const handleRemove = async (movieId: string) => {
     try {
-      const res = await fetchWithUser(`/api/swipe/${movieId}`, { method: 'DELETE' });
+      const res = await fetchWithUser(`/api/swipes/${movieId}`, { method: 'DELETE' });
       if (res.ok) {
         setMovies(prev => prev.filter(m => m.id !== movieId));
         setSelectedMovie(null);
@@ -54,7 +54,7 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
 
   const handleMoveToWatched = async (movieId: string) => {
     try {
-      const res = await fetchWithUser(`/api/swipe/${movieId}`, {
+      const res = await fetchWithUser(`/api/swipes/${movieId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'Watched' })

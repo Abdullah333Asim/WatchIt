@@ -93,7 +93,7 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
   const handleSwipe = async (action: 'Watched' | 'Pass' | 'Watchlist' | 'Not Interested') => {
     if (!movie) return;
 
-    fetchWithUser('/api/swipe', {
+    fetchWithUser('/api/swipes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ movieId: movie.id, action })

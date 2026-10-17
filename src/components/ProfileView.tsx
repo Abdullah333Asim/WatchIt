@@ -88,7 +88,7 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
 
   const handleRemove = async (movieId: string) => {
     try {
-      const res = await fetchWithUser(`/api/swipe/${movieId}`, { method: 'DELETE' });
+      const res = await fetchWithUser(`/api/swipes/${movieId}`, { method: 'DELETE' });
       if (res.ok) {
         setProfile((prev: any) => ({
           ...prev,
@@ -103,7 +103,7 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
 
   const handleMoveToWatched = async (movieId: string) => {
     try {
-      const res = await fetchWithUser(`/api/swipe/${movieId}`, {
+      const res = await fetchWithUser(`/api/swipes/${movieId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'Watched' })
