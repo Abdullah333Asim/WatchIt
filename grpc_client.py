@@ -36,20 +36,20 @@ def send_grpc_swipe(stub: swipes_pb2_grpc.SwipeServiceStub, movie_id: str, actio
 
 def main():
     print("=" * 60)
-    print("WATCHIT gRPC CLIENT TESTER (PART B)")
+    print("WATCHIT gRPC TRAFFIC GENERATOR (PART C)")
     print("=" * 60)
 
-    # Open a persistent HTTP/2 channel to the gRPC server
     with grpc.insecure_channel('localhost:50051') as channel:
         stub = swipes_pb2_grpc.SwipeServiceStub(channel)
         
-        # Test 1: Successful Request
-        print("\n[TEST 1] Sending Valid Request")
-        send_grpc_swipe(stub, movie_id=f"grpc-movie-{int(time.time())}", action="Watched", user_id="grpc-python-client")
-        
-        # Test 2: Invalid Input (Triggers grpc.status.INVALID_ARGUMENT)
-        print("\n[TEST 2] Sending Invalid Input (Bad Action)")
-        send_grpc_swipe(stub, movie_id="12345", action="SuperLike", user_id="grpc-python-client")
+        # Loop 20 times to generate dense metrics for Grafana
+        for i in range(1, 21):
+            print(f"\n[LOOP {i}/20]")
+            # 1. Valid Request -> gRPC OK (0)
+            send_grpc_swipe(stub, movie_id=f"grpc-movie-{int(time.time())}-{i}", action="Watched", user_id="grpc-python-client")
+            # 2. Invalid Request -> gRPC INVALID_ARGUMENT (3)
+            send_grpc_swipe(stub, movie_id="12345", action="SuperLike", user_id="grpc-python-client")
+            time.sleep(0.5)
 
 if __name__ == '__main__':
     main()

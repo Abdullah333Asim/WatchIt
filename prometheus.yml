@@ -12,3 +12,7 @@ scrape_configs:
     static_configs:
       # 'host.docker.internal' allows the Docker container to see your local computer's port 3000
       - targets: ['host.docker.internal:3000']
+
+  - job_name: 'watchit-grpc-server'
+    static_configs:
+      - targets: ['host.docker.internal:9091']

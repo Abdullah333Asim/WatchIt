@@ -31,3 +31,15 @@ export const aiProviderWins = new promClient.Counter({
   help: 'Tracks which AI provider wins the Promise.any race',
   labelNames: ['provider']
 });
+
+export const httpSwipeCalls = new client.Counter({
+  name: 'watchit_http_swipe_calls_total',
+  help: 'HTTP calls to POST /api/swipes by status code',
+  labelNames: ['status']
+});
+
+export const httpSwipeDuration = new client.Histogram({
+  name: 'watchit_http_swipe_duration_seconds',
+  help: 'Duration of POST /api/swipes in seconds (measured at the server)',
+  buckets: [0.1, 0.5, 1, 2, 3, 5, 8, 10, 15]
+});

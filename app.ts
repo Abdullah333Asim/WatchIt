@@ -13,7 +13,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import client from 'prom-client';
 import './server/metrics';
-import { swipeCounter, dbQuerySummary } from './server/metrics';
+import { swipeCounter, dbQuerySummary, httpSwipeCalls, httpSwipeDuration } from './server/metrics';
 import { logger } from './server/logger';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-guest-key';
@@ -305,7 +305,16 @@ export function createApp() {
   });
 
   // 2. POST /api/swipes (and legacy alias /api/swipe) — Create or idempotently record a swipe
-  app.post(["/api/swipes", "/api/swipe"], requireAuth, swipeRateLimiter, async (req, res) => {
+  app.post(["/api/swipes", "/api/swipe"],
+    (_req, res, next) => {
+      const endTimer = httpSwipeDuration.startTimer();
+      res.on('finish', () => {
+        endTimer();
+        httpSwipeCalls.labels(String(res.statusCode)).inc();
+      });
+      next();
+    },
+    requireAuth, swipeRateLimiter, async (req, res) => {
     // Support controlled fault simulation for Part A Python resilience testing (timeout / 503)
     const simulatedFault = req.headers['x-simulate-fault'] as string | undefined;
     if (simulatedFault === 'timeout') {
