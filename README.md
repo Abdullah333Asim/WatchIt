@@ -1,20 +1,17 @@
-# WatchIt - Observability
+# WatchIt - Assignment 2: HTTP APIs, gRPC, and Metrics
 
-This branch contains the observability implementation for **WatchIt**, an AI-powered movie discovery application.
+This branch adds a cleaned-up HTTP swipe API (`POST /api/swipes`), a separate gRPC swipe service, and Prometheus and Grafana metrics for both. It builds on the Assignment 1 observability setup.
 
 ## Prerequisites
 
-To run this project locally, your machine must have:
-
 - **Node.js** (v18+)
+- **Python** (3.10+)
 - **Docker Desktop** (running)
 - **Git**
 
----
-
 ## Environment Setup (.env)
 
-Create a `.env` file in the root directory with the following:
+Create a `.env` file in the root directory:
 
 ```env
 # AI & External APIs (add your own keys)
@@ -22,121 +19,143 @@ GEMINI_API_KEY="your_gemini_api_key_here"
 OPENROUTER_API_KEY="your_openrouter_api_key_here"
 TMDB_API_KEY="your_tmdb_api_key_here"
 
-# Local database (matches the Docker container started in Step 2 below)
+# Local database (matches the Docker container started in Step 3 below)
 DATABASE_URL="postgres://myuser:mypassword@127.0.0.1:5433/mydb"
 ```
 
-No other keys are required. This branch has been optimized so that now the Firebase login is optional — the app runs fully in guest mode without any Firebase configuration.
+No other keys are required. Firebase login is optional. The app runs fully in guest mode.
 
 ---
 
-## 1. Setup and Installation
+## 1. Run
 
-**Step 1: Clone the Repository**
+**Step 1: Clone the repository**
 
 ```bash
-git clone <repo url>
-cd <repo folder>
-git checkout assignment-1-observability
+git clone https://github.com/Abdullah333Asim/WatchIt.git
+cd WatchIt
+git checkout assignment-2-apis-grpc
 ```
 
-**Step 2: Install Dependencies**
+**Step 2: Install dependencies**
 
 ```bash
 npm install
+pip install --upgrade grpcio grpcio-tools
 ```
 
-**Step 3: Start a Local PostgreSQL Container**
+**Step 3: Start a local PostgreSQL container**
 
-Spin up a local database using Docker. (Port `5433` is used, not the default `5432`, to avoid conflicting with any native local Postgres installation.)
+Port `5433` is used to avoid clashing with a native Postgres install.
 
 ```bash
 docker run --name watchit-postgres -e POSTGRES_USER=myuser -e POSTGRES_PASSWORD=mypassword -e POSTGRES_DB=mydb -p 5433:5432 -d postgres:latest
 ```
 
-**Step 4: Push the Database Schema**
+**Step 4: Push the database schema**
 
 ```bash
 npx drizzle-kit push
 ```
 
-**Step 5: Start the Observability Stack**
-
-In the project root, start the Docker containers for Prometheus, Grafana, Elasticsearch, Kibana, Filebeat, and Node Exporter:
+**Step 5: Start Prometheus, Grafana and the logging stack**
 
 ```bash
 docker-compose up -d
 ```
 
-**Step 6: Start the Application**
-
-Start the frontend and backend:
+**Step 6: Start the HTTP server (port 3000)**
 
 ```bash
 npm run dev
 ```
 
----
+**Step 7: Start the gRPC server (port 50051, metrics on port 9091)**
 
-## 2. Using the Application
+In a second terminal:
 
-Once the Docker containers and the Node.js server are running:
+```bash
+npx tsx grpc-server.ts
+```
 
-- **WatchIt App:** [http://localhost:3000](http://localhost:3000)
-  Continue as guest and use the chat interface to ask Cine Noir for a movie recommendation. This generates metrics and logs.
+**Generate the Python gRPC code (optional)**
 
-- **Grafana:** [http://localhost:3001](http://localhost:3001)
-  Login: `admin` / Password: `admin`
+`swipes_pb2.py` and `swipes_pb2_grpc.py` are already in the repository. To create them again from `proto/swipes.proto`:
 
-- **Kibana:** [http://localhost:5601](http://localhost:5601)
+```bash
+python -m grpc_tools.protoc -I proto --python_out=. --grpc_python_out=. proto/swipes.proto
+```
 
----
+**Where things are**
 
-## 3. Testing the Observability Tools
-
-### Viewing Metrics (Grafana)
-
-Two exported dashboard JSON files are provided in this repository:
-
-1. `watchit-dashboard.json` — Custom application metrics: swipes, AI latency, active LLM requests, DB latency, AI race winners
-2. `node-exporter-dashboard.json` — Hardware/machine metrics: CPU, RAM, network, disk
-
-**To test:** In Grafana, go to **Dashboards → New → Import**, upload these JSON files, and select the local Prometheus data source. The dashboards will populate with data as you interact with the WatchIt app.
-
-### Viewing Logs (Kibana)
-
-All backend HTTP requests and errors are structured as JSON using Winston and written locally to `logs/app.log`. Filebeat reads this file and ships it to Elasticsearch.
-
-**To test:**
-
-1. Open Kibana and navigate to **Discover** (via the side menu).
-2. Create a Data View with the index pattern `watchit-logs-*` and select `@timestamp` as the time field.
-3. Filter logs by specific fields — for example, searching `severity: "error"` or tracking a specific `request_id`.
+- Swagger UI (OpenAPI docs): http://localhost:3000/api/docs
+- HTTP metrics: http://localhost:3000/metrics
+- gRPC metrics: http://localhost:9091/metrics
+- Prometheus: http://localhost:9090 (Status → Targets: `watchit-backend` and `watchit-grpc-server` should be `UP`)
+- Grafana: http://localhost:3001 (login `admin` / `admin`)
+- Kibana: http://localhost:5601
 
 ---
 
-## 4. Troubleshooting
+## 2. Test
 
-**"password authentication failed for user 'myuser'"**
+Both servers (Steps 6 and 7) must be running.
 
-This usually means the Node.js server connected to a pre-existing native PostgreSQL installation on your machine instead of the Docker container.
+**Swagger UI.** Open http://localhost:3000/api/docs. Get a guest token with `POST /api/auth/register`, click **Authorize**, and paste it. Then try `POST /api/swipes`:
 
-**The fix:** Confirm your `.env` uses `127.0.0.1:5433`, not `localhost:5432`, and that the Docker container was started with the `-p 5433:5432` flag.
+- A valid swipe, for example `{"movieId": "27209", "action": "Watched"}`: `201 Created`
+- The same request again: `200 OK` with `"idempotent_replay": true`
+- An action that isn't allowed, for example `"SuperLike"`: `400 Bad Request`
+- More than 8 requests within 15 seconds: `429 Too Many Requests` with a `Retry-After` header
+
+**Python HTTP caller** (timeout, retry with backoff, circuit breaker):
+
+```bash
+python http_client.py
+```
+
+Scenario 5 prints how many requests are left in the rate limit window and may not reach a `429`, so use Swagger UI to see the `429`. If you run the script twice, wait about 15 seconds between runs.
+
+**Python gRPC client** (20 valid and 20 invalid calls, 5 second deadline):
+
+```bash
+python grpc_client.py
+```
+
+**Grafana.** Go to **Dashboards → New → Import**, upload `watchit-dashboard.json`, and choose the Prometheus data source. After running the two scripts, set the time range to the last 15 minutes. The gRPC and HTTP panels will fill with data.
+
+**Logs (request ID across HTTP and gRPC).** In Kibana, create a Data View for `watchit-logs-*` (time field `@timestamp`). Copy the `trace-...` ID printed by `grpc_client.py` and search for it as `request_id`. Search `service_name: "watchit-grpc-server"` to see only the gRPC server.
 
 ---
 
-## 5. Safe Clean Up
+## 3. Troubleshooting
 
-1. **Stop the App:** Press `Ctrl + C` in the terminal running the Node.js server.
+- **`StatusCode.UNAVAILABLE` from `grpc_client.py`:** the gRPC server isn't running. Start it (Step 7).
+- **`No module named 'swipes_pb2'`:** run the Python scripts from the project root.
+- **"The grpc package installed is at version ...":** run `pip install --upgrade grpcio grpcio-tools`.
+- **"password authentication failed for user 'myuser'":** the app connected to a native Postgres install. Make sure `.env` uses `127.0.0.1:5433` and the container was started with `-p 5433:5432`.
+- **`TimeoutError` on the very first run of `http_client.py`:** This is a normal "cold start" delay. When the Express server boots up, compiling the TypeScript and establishing the initial database connection pool can take longer than the strict timeout in the test script. Just run the script a second time; the server will be "warm" and execute instantly.
 
-2. **Destroy the Telemetry Stack:** Spin down the Docker containers and permanently wipe their attached data volumes:
+## 4. Clean up
 
-   ```bash
-   docker-compose down -v
-   ```
+Stop both servers with `Ctrl + C`, then:
 
-3. **Destroy the Postgres Container:**
+```bash
+docker-compose down -v
+docker rm -f watchit-postgres
+```
 
-   ```bash
-   docker rm -f watchit-postgres
-   ```
+**Optional: keep the database but remove only the test movies**
+
+If you do not want to destroy the Postgres container but want to clean the UI for grading, open Drizzle Studio:
+
+```bash
+npx drizzle-kit studio
+```
+
+Open the local studio link, navigate to the **SQL Console**, and run these two queries in this exact order (because swipes are tied to movies):
+
+```sql
+DELETE FROM swipes WHERE movie_id IN (SELECT id FROM movies WHERE title LIKE 'Movie #%');
+DELETE FROM movies WHERE title LIKE 'Movie #%';
+```
