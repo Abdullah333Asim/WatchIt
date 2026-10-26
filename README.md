@@ -1,5 +1,7 @@
 # WatchIt - Assignment 2: HTTP APIs, gRPC, and Metrics
 
+[![Assignment 2 Walkthrough Video](https://markdown-videos-api.jorgenkh.no/youtube/ssPIzA-R0bM)](https://youtu.be/ssPIzA-R0bM)
+
 This branch adds a cleaned-up HTTP swipe API (`POST /api/swipes`), a separate gRPC swipe service, and Prometheus and Grafana metrics for both. It builds on the Assignment 1 observability setup.
 
 ## Prerequisites
