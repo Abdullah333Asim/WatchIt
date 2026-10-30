@@ -1,25 +1,31 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import Groq from "groq-sdk";
-import Cerebras from "@cerebras/cerebras_cloud_sdk";
+import OpenAI from "openai";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-if (!process.env.GEMINI_API_KEY) {
-  console.warn("GEMINI_API_KEY is not set. AI features will not work.");
+const geminiApiKey = process.env.GEMINI_API_KEY || "";
+if (!geminiApiKey) {
+  console.warn("GEMINI_API_KEY is not set. Google Gemini will be skipped.");
 }
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || "",
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-});
+const ai = geminiApiKey
+  ? new GoogleGenAI({
+      apiKey: geminiApiKey,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build",
+        },
+      },
+    })
+  : null;
 
-
-export async function getRecommendations(preferences: string, history: string, query: string, chatHistoryText: string = "") {
+export async function getRecommendations(
+  preferences: string,
+  history: string,
+  query: string,
+  chatHistoryText: string = ""
+) {
   const safeHistory = (history || "").replace(/[\r\n\t]+/g, " ").slice(0, 1000);
   const safeQuery = (query || "").replace(/[\r\n\t]+/g, " ").slice(0, 500);
   const safeChatHistory = (chatHistoryText || "").slice(0, 2000);
@@ -52,8 +58,11 @@ export async function getRecommendations(preferences: string, history: string, q
   `;
 
   const fetchGemini = async () => {
+    if (!ai) {
+      throw new Error("GEMINI_API_KEY not configured.");
+    }
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -62,7 +71,7 @@ export async function getRecommendations(preferences: string, history: string, q
           properties: {
             reply: {
               type: Type.STRING,
-              description: "Your conversational reply to the user, spoken as Cine Noir."
+              description: "Your conversational reply to the user, spoken as Cine Noir.",
             },
             recommendations: {
               type: Type.ARRAY,
@@ -73,74 +82,85 @@ export async function getRecommendations(preferences: string, history: string, q
                   title: { type: Type.STRING, description: "Movie title" },
                   year: { type: Type.STRING, description: "Release year" },
                   synopsis: { type: Type.STRING, description: "Brief synopsis" },
-                  why_it_matches: { type: Type.STRING, description: "Why it matches their taste" }
+                  why_it_matches: { type: Type.STRING, description: "Why it matches their taste" },
                 },
-                required: ["title", "year", "synopsis", "why_it_matches"]
-              }
-            }
+                required: ["title", "year", "synopsis", "why_it_matches"],
+              },
+            },
           },
-          required: ["reply", "recommendations"]
-        }
-      }
+          required: ["reply", "recommendations"],
+        },
+      },
     });
+
+    if (!response.text) {
+      throw new Error("Empty response from Gemini.");
+    }
     return response.text;
   };
 
-  const fetchGroq = async () => {
-    if (!process.env.GROQ_API_KEY) {
-      throw new Error("GROQ_API_KEY not set");
+  const fetchOpenRouter = async () => {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      throw new Error("OPENROUTER_API_KEY not configured.");
     }
-    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-    const response = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      model: "llama3-70b-8192",
+    const openrouter = new OpenAI({
+      baseURL: "https://openrouter.ai/api/v1",
+      apiKey,
+      defaultHeaders: {
+        "HTTP-Referer": process.env.APP_URL || "http://localhost:3000",
+        "X-Title": "WatchIt",
+      },
+    });
+
+    const response = await openrouter.chat.completions.create({
+      model: process.env.OPENROUTER_MODEL || "meta-llama/llama-3.1-8b-instruct",
+      messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
       temperature: 0.7,
     });
-    return response.choices[0]?.message?.content;
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error("Empty response from OpenRouter.");
+    }
+    return content;
   };
 
-  const fetchCerebras = async () => {
-    if (!process.env.CEREBRAS_API_KEY) {
-      throw new Error("CEREBRAS_API_KEY not set");
-    }
-    const cerebras = new Cerebras({ apiKey: process.env.CEREBRAS_API_KEY });
-    const response = await cerebras.chat.completions.create({
-      messages: [
+  const fetchLocalVault = () => {
+    return JSON.stringify({
+      reply: "The external cinema networks are temporarily clouded, but my private vault is open. Here are some timeless, atmospheric selections matching your taste while the connection re-establishes.",
+      recommendations: [
         {
-          role: "user",
-          content: prompt
+          title: "Blade Runner 2049",
+          year: "2017",
+          synopsis: "A young blade runner's discovery of a long-buried secret leads him to track down former blade runner Rick Deckard.",
+          why_it_matches: "A supreme atmospheric noir with mesmerizing neo-classical visuals."
+        },
+        {
+          title: "Drive",
+          year: "2011",
+          synopsis: "A mysterious Hollywood stuntman and mechanic who moonlights as a getaway driver finds himself in trouble when he helps out his neighbor.",
+          why_it_matches: "Hypnotic synthwave neo-noir with razor-sharp direction."
+        },
+        {
+          title: "Chinatown",
+          year: "1974",
+          synopsis: "A private detective hired to expose an adulterer finds himself caught in a web of deceit, corruption, and murder.",
+          why_it_matches: "The quintessential hardboiled detective mystery that defines the noir ethos."
         }
-      ],
-      model: "llama3.1-8b",
-      response_format: { type: "json_object" },
-      temperature: 0.7,
+      ]
     });
-    if (!("choices" in response)) {
-      throw new Error("Cerebras returned an unexpected response shape");
-    }
-    const firstChoice = response.choices[0];
-    if (!firstChoice) return null;
-    if ("message" in firstChoice) return firstChoice.message?.content;
-    if ("delta" in firstChoice) return firstChoice.delta?.content;
-    return null;
   };
 
   try {
-    // Race them for the fastest response!
-    const result = await Promise.any([fetchCerebras(), fetchGroq(), fetchGemini()]);
-    if (!result) throw new Error("Empty response");
-    return result;
+    // Race Google Gemini and OpenRouter for the fastest response
+    const winner = await Promise.any([fetchGemini(), fetchOpenRouter()]);
+    if (!winner) throw new Error("Empty response from AI providers.");
+    return winner;
   } catch (error) {
-    console.error("Both APIs failed or returned empty", error);
-    // Fallback to one more try with Gemini just in case
-    const fallback = await fetchGemini();
-    return fallback;
+    console.warn("External AI providers failed. Using local vault safety net:", error);
+    return fetchLocalVault();
   }
 }
 
