@@ -12,13 +12,27 @@ import LogoAnimation from "./components/LogoAnimation";
 
 type Tab = "chat" | "swipe" | "profile" | "movies";
 
+interface HistoryState {
+  tab: Tab;
+  movieListType?: 'Watched' | 'Watchlist' | 'Pass';
+  chatThread?: boolean;
+  conversationId?: string | null;
+  chatSidebar?: boolean;
+  profileEditing?: boolean;
+  movieModal?: boolean;
+}
+
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
-  const [activeTab, setActiveTab] = useState<Tab>("swipe");
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const state = window.history.state as HistoryState | null;
+    return state?.tab || "swipe";
+  });
   const [logoAnimTrigger, setLogoAnimTrigger] = useState(0);
   const [accentColor, setAccentColor] = useState("#c9c6c5");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+
   useEffect(() => {
     const guestToken = localStorage.getItem('guest_token');
     if (guestToken) {
@@ -33,8 +47,54 @@ export default function App() {
     });
     return unsub;
   }, []);
-  const [movieListType, setMovieListType] = useState<'Watched' | 'Watchlist'>('Watched');
+
+  const [movieListType, setMovieListType] = useState<'Watched' | 'Watchlist' | 'Pass'>(() => {
+    const state = window.history.state as HistoryState | null;
+    return state?.movieListType || 'Watched';
+  });
   const [isChatSidebarOpen, setIsChatSidebarOpen] = useState(false);
+
+  // Sync browser history state for tabs & back/forward navigation
+  useEffect(() => {
+    if (!window.history.state || !window.history.state.tab) {
+      window.history.replaceState({ tab: activeTab, movieListType }, '');
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      const state = event.state as HistoryState | null;
+      if (state && state.tab) {
+        setActiveTab(state.tab);
+        if (state.movieListType) {
+          setMovieListType(state.movieListType);
+        }
+      } else {
+        setActiveTab("swipe");
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigateToTab = (tab: Tab, listType?: 'Watched' | 'Watchlist' | 'Pass', replace = false) => {
+    if (tab === activeTab && (!listType || listType === movieListType)) {
+      return;
+    }
+    const nextState: HistoryState = {
+      tab,
+      ...(listType ? { movieListType: listType } : (tab === 'movies' ? { movieListType } : {}))
+    };
+    if (replace) {
+      window.history.replaceState(nextState, '');
+    } else {
+      window.history.pushState(nextState, '');
+    }
+    setActiveTab(tab);
+    if (listType) {
+      setMovieListType(listType);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === "chat") {
       setLogoAnimTrigger((p) => p + 1);
@@ -52,8 +112,23 @@ export default function App() {
     switch (activeTab) {
       case "chat": return <ChatView onSidebarToggle={setIsChatSidebarOpen} />;
       case "swipe": return <SwipeView onColorExtracted={setAccentColor} />;
-      case "profile": return <ProfileView onViewList={(type) => { setMovieListType(type); setActiveTab("movies"); }} />;
-      case "movies": return <MovieListView listType={movieListType} onBack={() => setActiveTab("profile")} />;
+      case "profile": return (
+        <ProfileView 
+          onViewList={(type) => navigateToTab("movies", type)} 
+        />
+      );
+      case "movies": return (
+        <MovieListView 
+          listType={movieListType} 
+          onBack={() => {
+            if (window.history.state?.tab === 'movies') {
+              window.history.back();
+            } else {
+              navigateToTab("profile");
+            }
+          }} 
+        />
+      );
     }
   };
 
@@ -107,19 +182,25 @@ export default function App() {
         <nav id="bottom-nav" className="flex items-center gap-1 p-1.5 bg-[#1c1b1b]/90 backdrop-blur-3xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] rounded-full">
           <NavItem 
             active={activeTab === 'chat'} 
-            onClick={() => setActiveTab('chat')} 
+            onClick={() => {
+              if (activeTab === 'chat' && window.history.state?.chatThread) {
+                window.history.back();
+              } else {
+                navigateToTab('chat');
+              }
+            }} 
             icon={<MessageSquare className="w-[18px] h-[18px] flex-shrink-0" />} 
             label="Chat"
           />
           <NavItem 
             active={activeTab === 'swipe'} 
-            onClick={() => setActiveTab('swipe')} 
+            onClick={() => navigateToTab('swipe')} 
             icon={<CardsIcon className="w-[18px] h-[18px] flex-shrink-0" />} 
             label="Swipe"
           />
           <NavItem 
             active={activeTab === 'profile' || activeTab === 'movies'} 
-            onClick={() => setActiveTab('profile')} 
+            onClick={() => navigateToTab('profile')} 
             icon={<User className="w-[18px] h-[18px] flex-shrink-0" />} 
             label="Profile"
           />
@@ -162,7 +243,6 @@ function NavItem({ active, onClick, icon, label }: { active: boolean, onClick: (
     </button>
   );
 }
-
 
 function LoginView() {
   const [loading, setLoading] = useState(false);
@@ -301,6 +381,7 @@ function LoginView() {
     </div>
   );
 }
+
 function CardsIcon({ className }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>

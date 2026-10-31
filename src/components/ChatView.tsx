@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Send, Sparkles, PlusCircle, ArrowUp, Menu, Plus, MessageSquare, X, Film } from "lucide-react";
+import { Send, Sparkles, PlusCircle, ArrowUp, Menu, Plus, MessageSquare, X, Film, Trash2 } from "lucide-react";
 import Markdown from "react-markdown";
 import { fetchWithUser } from "../lib/api";
 
@@ -131,7 +131,23 @@ export default function ChatView({ onSidebarToggle }: { onSidebarToggle?: (isOpe
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  
+
+  const currentConversationIdRef = useRef(currentConversationId);
+  const messagesRef = useRef(messages);
+  const isSidebarOpenRef = useRef(isSidebarOpen);
+
+  useEffect(() => {
+    currentConversationIdRef.current = currentConversationId;
+  }, [currentConversationId]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    isSidebarOpenRef.current = isSidebarOpen;
+  }, [isSidebarOpen]);
+
   useEffect(() => {
     onSidebarToggle?.(isSidebarOpen);
   }, [isSidebarOpen, onSidebarToggle]);
@@ -147,6 +163,44 @@ export default function ChatView({ onSidebarToggle }: { onSidebarToggle?: (isOpe
   useEffect(() => {
     fetchConversations();
     fetchWatchlist();
+
+    // Restore active conversation if state has one on mount (e.g. forward navigation or refresh)
+    if (window.history.state?.conversationId) {
+      loadConversation(window.history.state.conversationId, true);
+    }
+  }, []);
+
+  // Listen to popstate to handle browser back / forward navigation
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      const state = event.state;
+
+      // Check sidebar open state
+      const hasSidebar = !!state?.chatSidebar;
+      if (isSidebarOpenRef.current && !hasSidebar) {
+        setIsSidebarOpen(false);
+      } else if (!isSidebarOpenRef.current && hasSidebar) {
+        setIsSidebarOpen(true);
+      }
+
+      // Check active chat thread state
+      const hasThread = !!state?.chatThread;
+      const conversationIdInState = state?.conversationId;
+
+      if (!hasThread) {
+        // Returned to default empty chat view
+        if (currentConversationIdRef.current !== null || messagesRef.current.length > 0) {
+          setCurrentConversationId(null);
+          setMessages([]);
+        }
+      } else if (conversationIdInState && conversationIdInState !== currentConversationIdRef.current) {
+        // Navigated to another conversation thread
+        loadConversation(conversationIdInState, true);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   const fetchWatchlist = async () => {
@@ -174,7 +228,7 @@ export default function ChatView({ onSidebarToggle }: { onSidebarToggle?: (isOpe
     }
   };
 
-  const loadConversation = async (id: string) => {
+  const loadConversation = async (id: string, fromHistory = false) => {
     try {
       const res = await fetchWithUser(`/api/conversations/${id}`);
       if (res.ok) {
@@ -182,6 +236,14 @@ export default function ChatView({ onSidebarToggle }: { onSidebarToggle?: (isOpe
         setMessages(data.messages);
         setCurrentConversationId(id);
         setIsSidebarOpen(false);
+
+        if (!fromHistory) {
+          if (window.history.state?.chatSidebar) {
+            window.history.replaceState({ ...window.history.state, chatSidebar: false, chatThread: true, conversationId: id }, '');
+          } else {
+            window.history.pushState({ ...window.history.state, chatThread: true, conversationId: id }, '');
+          }
+        }
       }
     } catch (e) {
       console.error('Failed to load conversation', e);
@@ -192,6 +254,59 @@ export default function ChatView({ onSidebarToggle }: { onSidebarToggle?: (isOpe
     setCurrentConversationId(null);
     setMessages([]);
     setIsSidebarOpen(false);
+
+    if (window.history.state?.chatSidebar && window.history.state?.chatThread) {
+      window.history.go(-2);
+    } else if (window.history.state?.chatThread || window.history.state?.chatSidebar) {
+      window.history.back();
+    }
+  };
+
+  const openSidebar = () => {
+    setIsSidebarOpen(true);
+    window.history.pushState({ ...window.history.state, chatSidebar: true }, '');
+  };
+
+  const closeSidebar = () => {
+    if (window.history.state?.chatSidebar) {
+      window.history.back();
+    } else {
+      setIsSidebarOpen(false);
+    }
+  };
+
+  const handleDeleteChat = async (e: React.MouseEvent, chatId: string) => {
+    e.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this chat?")) {
+      return;
+    }
+
+    try {
+      const res = await fetchWithUser(`/api/chat/${chatId}`, {
+        method: 'DELETE'
+      });
+
+      if (res.ok) {
+        // Remove from local React state array immediately
+        setConversations(prev => prev.filter(c => c.id !== chatId));
+
+        // Edge case: If the deleted chat is currently active/open, reset to default empty view
+        if (currentConversationId === chatId) {
+          setCurrentConversationId(null);
+          setMessages([]);
+          if (window.history.state?.chatThread) {
+            window.history.replaceState({ ...window.history.state, chatThread: false, conversationId: null }, '');
+          }
+        }
+      } else {
+        const data = await res.json().catch(() => ({}));
+        console.error("Delete chat failed:", data);
+        alert(data.details ? `${data.error}: ${data.details}` : (data.error || "Failed to delete chat."));
+      }
+    } catch (err) {
+      console.error("Failed to delete chat", err);
+      alert("Failed to delete chat. Please try again.");
+    }
   };
 
   const handleSend = async () => {
@@ -199,6 +314,12 @@ export default function ChatView({ onSidebarToggle }: { onSidebarToggle?: (isOpe
 
     const userMsg = input;
     setInput("");
+
+    // If starting a chat from the empty state, push history state so back button returns to empty chat
+    if (!currentConversationId && messages.length === 0) {
+      window.history.pushState({ ...window.history.state, chatThread: true }, '');
+    }
+
     setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
     setLoading(true);
 
@@ -212,6 +333,7 @@ export default function ChatView({ onSidebarToggle }: { onSidebarToggle?: (isOpe
       setMessages(prev => [...prev, { role: 'ai', content: data.response }]);
       if (!currentConversationId && data.conversationId) {
         setCurrentConversationId(data.conversationId);
+        window.history.replaceState({ ...window.history.state, chatThread: true, conversationId: data.conversationId }, '');
         fetchConversations();
       }
     } catch (error) {
@@ -225,7 +347,7 @@ export default function ChatView({ onSidebarToggle }: { onSidebarToggle?: (isOpe
     <div className="h-[calc(100vh-160px)] flex flex-col relative w-full">
       {/* Top Bar Navigation */}
       <div className="w-full flex justify-between px-6 pt-4 z-20 shrink-0 md:fixed md:top-16 md:left-0 md:w-auto md:flex-col md:gap-2 md:pt-4 md:pl-6 pointer-events-none md:[&>*]:pointer-events-auto">
-        <button onClick={() => setIsSidebarOpen(true)} className="pointer-events-auto glass-panel p-2 flex items-center gap-2 rounded-xl text-white/60 hover:text-white transition-colors">
+        <button onClick={openSidebar} className="pointer-events-auto glass-panel p-2 flex items-center gap-2 rounded-xl text-white/60 hover:text-white transition-colors">
           <Menu className="w-5 h-5" />
         </button>
         <button onClick={startNewChat} className="pointer-events-auto glass-panel p-2 flex items-center gap-2 rounded-xl text-white/60 hover:text-white transition-colors">
@@ -233,7 +355,6 @@ export default function ChatView({ onSidebarToggle }: { onSidebarToggle?: (isOpe
         </button>
       </div>
       <div className="w-full flex flex-col relative flex-grow overflow-hidden">
-
 
       <div className={`flex-grow overflow-y-auto pb-24 dark-scrollbar w-full ${messages.length === 0 ? 'flex flex-col items-center justify-center -mt-16 md:mt-0' : 'pt-4'}`}>
         <h1 className="sr-only">AI Movie Assistant Chat</h1>
@@ -316,7 +437,7 @@ export default function ChatView({ onSidebarToggle }: { onSidebarToggle?: (isOpe
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsSidebarOpen(false)}
+              onClick={closeSidebar}
               className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
             />
             <motion.div 
@@ -327,7 +448,7 @@ export default function ChatView({ onSidebarToggle }: { onSidebarToggle?: (isOpe
               className="fixed top-0 left-0 w-72 h-full bg-[#111111] border-r border-white/5 z-[65] shadow-2xl flex flex-col p-4"
             >
               <div className="flex items-center mb-6 shrink-0 pt-2">
-                <button onClick={() => setIsSidebarOpen(false)} className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-full transition-colors">
+                <button onClick={closeSidebar} className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-full transition-colors">
                   <Menu className="w-5 h-5" />
                 </button>
               </div>
@@ -339,14 +460,26 @@ export default function ChatView({ onSidebarToggle }: { onSidebarToggle?: (isOpe
               <div className="flex-1 overflow-y-auto space-y-1 dark-scrollbar pb-20">
                  <div className="text-xs font-semibold text-white/40 mb-3 px-4">Recent</div>
                  {conversations.map(c => (
-                   <button 
+                   <div 
                       key={c.id} 
-                      onClick={() => loadConversation(c.id)} 
-                      className={`w-full text-left px-4 py-2.5 rounded-full flex items-center gap-3 transition-colors ${c.id === currentConversationId ? 'bg-[#2b2a2a] text-white' : 'text-white/70 hover:bg-white/5 hover:text-white'}`}
+                      className={`group w-full px-3 py-1.5 rounded-full flex items-center justify-between transition-colors ${c.id === currentConversationId ? 'bg-[#2b2a2a] text-white' : 'text-white/70 hover:bg-white/5 hover:text-white'}`}
                    >
-                      <MessageSquare className="w-4 h-4 shrink-0 opacity-70" />
-                      <span className="text-sm font-normal truncate">{c.title}</span>
-                   </button>
+                      <button 
+                         onClick={() => loadConversation(c.id)} 
+                         className="flex-1 min-w-0 flex items-center gap-3 text-left py-1 pl-1 cursor-pointer"
+                      >
+                         <MessageSquare className="w-4 h-4 shrink-0 opacity-70" />
+                         <span className="text-sm font-normal truncate">{c.title}</span>
+                      </button>
+                      <button 
+                         onClick={(e) => handleDeleteChat(e, c.id)}
+                         title="Delete chat"
+                         aria-label={`Delete chat: ${c.title}`}
+                         className="p-1.5 rounded-full opacity-60 sm:opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-red-400 text-white/40 transition-all shrink-0 ml-1 cursor-pointer focus:opacity-100"
+                      >
+                         <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                   </div>
                  ))}
                  {conversations.length === 0 && (
                     <p className="text-sm text-white/40 px-4 mt-2">No recent chats.</p>

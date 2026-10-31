@@ -19,7 +19,8 @@ export const movies = pgTable('movies', {
   duration: text('duration'),
   synopsis: text('synopsis'),
   posterUrl: text('poster_url'),
-  rating: real('rating')
+  rating: real('rating'),
+  imdbId: text('imdb_id')
 });
 
 export const swipes = pgTable('swipes', {
@@ -29,7 +30,8 @@ export const swipes = pgTable('swipes', {
   timestamp: timestamp('timestamp').defaultNow()
 }, (table) => ({
   pk: primaryKey({ columns: [table.userId, table.movieId] }),
-  userIdIdx: index('swipes_user_id_idx').on(table.userId)
+  userIdIdx: index('swipes_user_id_idx').on(table.userId),
+  userActionIdx: index('swipes_user_action_idx').on(table.userId, table.action)
 }));
 
 export const conversations = pgTable('conversations', {

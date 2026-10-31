@@ -69,7 +69,8 @@ var movies = (0, import_pg_core.pgTable)("movies", {
   duration: (0, import_pg_core.text)("duration"),
   synopsis: (0, import_pg_core.text)("synopsis"),
   posterUrl: (0, import_pg_core.text)("poster_url"),
-  rating: (0, import_pg_core.real)("rating")
+  rating: (0, import_pg_core.real)("rating"),
+  imdbId: (0, import_pg_core.text)("imdb_id")
 });
 var swipes = (0, import_pg_core.pgTable)("swipes", {
   userId: (0, import_pg_core.text)("user_id").notNull().references(() => users.id),
@@ -78,7 +79,8 @@ var swipes = (0, import_pg_core.pgTable)("swipes", {
   timestamp: (0, import_pg_core.timestamp)("timestamp").defaultNow()
 }, (table) => ({
   pk: (0, import_pg_core.primaryKey)({ columns: [table.userId, table.movieId] }),
-  userIdIdx: (0, import_pg_core.index)("swipes_user_id_idx").on(table.userId)
+  userIdIdx: (0, import_pg_core.index)("swipes_user_id_idx").on(table.userId),
+  userActionIdx: (0, import_pg_core.index)("swipes_user_action_idx").on(table.userId, table.action)
 }));
 var conversations = (0, import_pg_core.pgTable)("conversations", {
   id: (0, import_pg_core.text)("id").primaryKey(),
@@ -132,21 +134,21 @@ var import_drizzle_orm3 = require("drizzle-orm");
 
 // server/gemini.ts
 var import_genai = require("@google/genai");
-var import_groq_sdk = __toESM(require("groq-sdk"));
-var import_cerebras_cloud_sdk = __toESM(require("@cerebras/cerebras_cloud_sdk"));
+var import_openai = __toESM(require("openai"));
 var import_dotenv = __toESM(require("dotenv"));
 import_dotenv.default.config();
-if (!process.env.GEMINI_API_KEY) {
-  console.warn("GEMINI_API_KEY is not set. AI features will not work.");
+var geminiApiKey = process.env.GEMINI_API_KEY || "";
+if (!geminiApiKey) {
+  console.warn("GEMINI_API_KEY is not set. Google Gemini will be skipped.");
 }
-var ai = new import_genai.GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || "",
+var ai = geminiApiKey ? new import_genai.GoogleGenAI({
+  apiKey: geminiApiKey,
   httpOptions: {
     headers: {
       "User-Agent": "aistudio-build"
     }
   }
-});
+}) : null;
 async function getRecommendations(preferences, history, query, chatHistoryText = "") {
   const safeHistory = (history || "").replace(/[\r\n\t]+/g, " ").slice(0, 1e3);
   const safeQuery = (query || "").replace(/[\r\n\t]+/g, " ").slice(0, 500);
@@ -178,8 +180,11 @@ async function getRecommendations(preferences, history, query, chatHistoryText =
     }
   `;
   const fetchGemini = async () => {
+    if (!ai) {
+      throw new Error("GEMINI_API_KEY not configured.");
+    }
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -209,59 +214,68 @@ async function getRecommendations(preferences, history, query, chatHistoryText =
         }
       }
     });
+    if (!response.text) {
+      throw new Error("Empty response from Gemini.");
+    }
     return response.text;
   };
-  const fetchGroq = async () => {
-    if (!process.env.GROQ_API_KEY) {
-      throw new Error("GROQ_API_KEY not set");
+  const fetchOpenRouter = async () => {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      throw new Error("OPENROUTER_API_KEY not configured.");
     }
-    const groq = new import_groq_sdk.default({ apiKey: process.env.GROQ_API_KEY });
-    const response = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      model: "llama3-70b-8192",
+    const openrouter = new import_openai.default({
+      baseURL: "https://openrouter.ai/api/v1",
+      apiKey,
+      defaultHeaders: {
+        "HTTP-Referer": process.env.APP_URL || "http://localhost:3000",
+        "X-Title": "WatchIt"
+      }
+    });
+    const response = await openrouter.chat.completions.create({
+      model: process.env.OPENROUTER_MODEL || "meta-llama/llama-3.1-8b-instruct",
+      messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
       temperature: 0.7
     });
-    return response.choices[0]?.message?.content;
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error("Empty response from OpenRouter.");
+    }
+    return content;
   };
-  const fetchCerebras = async () => {
-    if (!process.env.CEREBRAS_API_KEY) {
-      throw new Error("CEREBRAS_API_KEY not set");
-    }
-    const cerebras = new import_cerebras_cloud_sdk.default({ apiKey: process.env.CEREBRAS_API_KEY });
-    const response = await cerebras.chat.completions.create({
-      messages: [
+  const fetchLocalVault = () => {
+    return JSON.stringify({
+      reply: "The external cinema networks are temporarily clouded, but my private vault is open. Here are some timeless, atmospheric selections matching your taste while the connection re-establishes.",
+      recommendations: [
         {
-          role: "user",
-          content: prompt
+          title: "Blade Runner 2049",
+          year: "2017",
+          synopsis: "A young blade runner's discovery of a long-buried secret leads him to track down former blade runner Rick Deckard.",
+          why_it_matches: "A supreme atmospheric noir with mesmerizing neo-classical visuals."
+        },
+        {
+          title: "Drive",
+          year: "2011",
+          synopsis: "A mysterious Hollywood stuntman and mechanic who moonlights as a getaway driver finds himself in trouble when he helps out his neighbor.",
+          why_it_matches: "Hypnotic synthwave neo-noir with razor-sharp direction."
+        },
+        {
+          title: "Chinatown",
+          year: "1974",
+          synopsis: "A private detective hired to expose an adulterer finds himself caught in a web of deceit, corruption, and murder.",
+          why_it_matches: "The quintessential hardboiled detective mystery that defines the noir ethos."
         }
-      ],
-      model: "llama3.1-8b",
-      response_format: { type: "json_object" },
-      temperature: 0.7
+      ]
     });
-    if (!("choices" in response)) {
-      throw new Error("Cerebras returned an unexpected response shape");
-    }
-    const firstChoice = response.choices[0];
-    if (!firstChoice) return null;
-    if ("message" in firstChoice) return firstChoice.message?.content;
-    if ("delta" in firstChoice) return firstChoice.delta?.content;
-    return null;
   };
   try {
-    const result = await Promise.any([fetchCerebras(), fetchGroq(), fetchGemini()]);
-    if (!result) throw new Error("Empty response");
-    return result;
+    const winner = await Promise.any([fetchGemini(), fetchOpenRouter()]);
+    if (!winner) throw new Error("Empty response from AI providers.");
+    return winner;
   } catch (error) {
-    console.error("Both APIs failed or returned empty", error);
-    const fallback = await fetchGemini();
-    return fallback;
+    console.warn("External AI providers failed. Using local vault safety net:", error);
+    return fetchLocalVault();
   }
 }
 
@@ -385,38 +399,52 @@ async function loadPopularMovies(page = 1) {
     }
     const data = await res.json();
     if (data.results && Array.isArray(data.results)) {
-      for (const m of data.results) {
-        if (!m.poster_path) continue;
-        const existing = (await db.execute(import_drizzle_orm2.sql`SELECT id FROM movies WHERE id = ${m.id.toString()}`)).rows?.[0];
-        if (existing) continue;
-        const year = m.release_date ? parseInt(m.release_date.split("-")[0]) : 0;
-        const genres = (m.genre_ids || []).map((id) => GENRES[id]).filter(Boolean).join(", ");
-        let duration = "120m";
-        try {
-          const detailRes = await fetch(`${TMDB_BASE_URL}/movie/${m.id}?api_key=${TMDB_API_KEY}&language=en-US`);
-          if (detailRes.ok) {
-            const detailData = await detailRes.json();
-            if (detailData.runtime) {
-              duration = `${detailData.runtime}m`;
+      await Promise.all(
+        data.results.map(async (m) => {
+          if (!m.poster_path) return;
+          const existing = (await db.execute(import_drizzle_orm2.sql`SELECT id, imdb_id FROM movies WHERE id = ${m.id.toString()}`)).rows?.[0];
+          if (existing && existing.imdb_id) return;
+          const year = m.release_date ? parseInt(m.release_date.split("-")[0]) : 0;
+          const genres = (m.genre_ids || []).map((id) => GENRES[id]).filter(Boolean).join(", ");
+          let duration = "120m";
+          let imdbId = null;
+          try {
+            const detailRes = await fetch(`${TMDB_BASE_URL}/movie/${m.id}?api_key=${TMDB_API_KEY}&language=en-US`);
+            if (detailRes.ok) {
+              const detailData = await detailRes.json();
+              if (detailData.runtime) {
+                duration = `${detailData.runtime}m`;
+              }
+              if (detailData.imdb_id) {
+                imdbId = detailData.imdb_id;
+              }
             }
+          } catch (e) {
+            console.error("Failed to fetch movie detail", e);
           }
-        } catch (e) {
-          console.error("Failed to fetch movie detail", e);
-        }
-        try {
-          await db.insert(movies).values({
-            id: m.id.toString(),
-            title: m.title,
-            year,
-            genre: genres || "Unknown",
-            duration,
-            synopsis: m.overview || "No synopsis available.",
-            posterUrl: `https://image.tmdb.org/t/p/w500${m.poster_path}`,
-            rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0
-          }).onConflictDoNothing();
-        } catch (e) {
-        }
-      }
+          try {
+            await db.insert(movies).values({
+              id: m.id.toString(),
+              title: m.title,
+              year,
+              genre: genres || "Unknown",
+              duration,
+              synopsis: m.overview || "No synopsis available.",
+              posterUrl: `https://image.tmdb.org/t/p/w500${m.poster_path}`,
+              rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0,
+              imdbId
+            }).onConflictDoUpdate({
+              target: movies.id,
+              set: {
+                imdbId: imdbId || import_drizzle_orm2.sql`movies.imdb_id`,
+                duration,
+                rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0
+              }
+            });
+          } catch (e) {
+          }
+        })
+      );
       return true;
     }
   } catch (e) {
@@ -444,12 +472,16 @@ async function searchMovieAndSave(title, yearStr) {
       const year = m.release_date ? parseInt(m.release_date.split("-")[0]) : cleanYear ? parseInt(cleanYear) : 0;
       const genres = (m.genre_ids || []).map((id) => GENRES[id]).filter(Boolean).join(", ");
       let duration = "120m";
+      let imdbId = null;
       try {
         const detailRes = await fetch(`${TMDB_BASE_URL}/movie/${m.id}?api_key=${TMDB_API_KEY}&language=en-US`);
         if (detailRes.ok) {
           const detailData = await detailRes.json();
           if (detailData.runtime) {
             duration = `${detailData.runtime}m`;
+          }
+          if (detailData.imdb_id) {
+            imdbId = detailData.imdb_id;
           }
         }
       } catch (e) {
@@ -464,14 +496,16 @@ async function searchMovieAndSave(title, yearStr) {
           duration,
           synopsis: m.overview || "No synopsis available.",
           posterUrl: poster_url,
-          rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0
+          rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0,
+          imdbId
         }).onConflictDoUpdate({
           target: movies.id,
           set: {
             posterUrl: poster_url,
             title: m.title,
             year,
-            rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0
+            rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0,
+            imdbId: imdbId || import_drizzle_orm2.sql`movies.imdb_id`
           }
         });
       } catch (e) {
@@ -481,7 +515,8 @@ async function searchMovieAndSave(title, yearStr) {
         title: m.title,
         year,
         poster_url,
-        rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0
+        rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0,
+        imdb_id: imdbId
       };
     }
   } catch (e) {
@@ -599,8 +634,54 @@ function createApp() {
     const page = parseInt(req.query.page) || 1;
     try {
       await loadPopularMovies(page);
-      const moviesResult = await db.execute(import_drizzle_orm3.sql`SELECT * FROM movies WHERE id NOT IN (SELECT movie_id FROM swipes WHERE user_id = ${userId}) ORDER BY RANDOM() LIMIT 10`);
-      res.json(moviesResult.rows || moviesResult);
+      let moviesResult = await db.execute(import_drizzle_orm3.sql`
+        SELECT * FROM movies 
+        WHERE id NOT IN (
+          SELECT movie_id FROM swipes 
+          WHERE user_id = ${userId} 
+          AND (
+            action IN ('Watched', 'Watchlist', 'Not Interested')
+            OR (action = 'Pass' AND timestamp > NOW() - INTERVAL '7 days')
+          )
+        ) 
+        ORDER BY RANDOM() 
+        LIMIT 10
+      `);
+      let rows = moviesResult.rows || moviesResult;
+      if (rows.length < 10) {
+        for (let p = page + 1; p <= page + 3; p++) {
+          await loadPopularMovies(p);
+          moviesResult = await db.execute(import_drizzle_orm3.sql`
+            SELECT * FROM movies 
+            WHERE id NOT IN (
+              SELECT movie_id FROM swipes 
+              WHERE user_id = ${userId} 
+              AND (
+                action IN ('Watched', 'Watchlist', 'Not Interested')
+                OR (action = 'Pass' AND timestamp > NOW() - INTERVAL '7 days')
+              )
+            ) 
+            ORDER BY RANDOM() 
+            LIMIT 10
+          `);
+          rows = moviesResult.rows || moviesResult;
+          if (rows.length >= 10) break;
+        }
+      }
+      if (rows.length < 10) {
+        const fallbackResult = await db.execute(import_drizzle_orm3.sql`
+          SELECT * FROM movies 
+          WHERE id NOT IN (
+            SELECT movie_id FROM swipes 
+            WHERE user_id = ${userId} 
+            AND action IN ('Watched', 'Watchlist', 'Not Interested')
+          ) 
+          ORDER BY RANDOM() 
+          LIMIT 10
+        `);
+        rows = fallbackResult.rows || fallbackResult;
+      }
+      res.json(rows);
     } catch (error) {
       console.error("Get movies error", error);
       res.status(500).json({ error: "Internal server error" });
@@ -637,7 +718,7 @@ function createApp() {
     const { action } = req.body;
     const userId = req.user.uid;
     try {
-      await db.update(swipes).set({ action }).where((0, import_drizzle_orm3.and)((0, import_drizzle_orm3.eq)(swipes.userId, userId), (0, import_drizzle_orm3.eq)(swipes.movieId, movieId)));
+      await db.update(swipes).set({ action, timestamp: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm3.and)((0, import_drizzle_orm3.eq)(swipes.userId, userId), (0, import_drizzle_orm3.eq)(swipes.movieId, movieId)));
       res.json({ success: true });
     } catch (error) {
       console.error("Put swipe error", error);
@@ -698,6 +779,38 @@ function createApp() {
       res.status(500).json({ error: "Internal server error" });
     }
   });
+  const handleDeleteChatSession = async (req, res) => {
+    const chatId = (req.params.chatId || req.params.id)?.trim();
+    const user = req.user;
+    const userId = user?.uid || user?.id || user?.sub;
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized: Missing user identity" });
+    }
+    if (!chatId) {
+      return res.status(400).json({ error: "chatId parameter is required" });
+    }
+    try {
+      const convo = (await db.select().from(conversations).where((0, import_drizzle_orm3.and)((0, import_drizzle_orm3.eq)(conversations.id, chatId), (0, import_drizzle_orm3.eq)(conversations.userId, userId)))).at(0);
+      if (!convo) {
+        const anyConvo = (await db.select({ id: conversations.id }).from(conversations).where((0, import_drizzle_orm3.eq)(conversations.id, chatId))).at(0);
+        if (!anyConvo) {
+          return res.status(404).json({ error: "Chat session not found" });
+        }
+        return res.status(403).json({ error: "Forbidden: You do not have permission to delete this chat session" });
+      }
+      await db.delete(messages).where((0, import_drizzle_orm3.eq)(messages.conversationId, chatId));
+      await db.delete(conversations).where((0, import_drizzle_orm3.and)((0, import_drizzle_orm3.eq)(conversations.id, chatId), (0, import_drizzle_orm3.eq)(conversations.userId, userId)));
+      return res.json({ success: true, message: "Chat deleted successfully" });
+    } catch (error) {
+      console.error("[DELETE /api/chat/:chatId] Error deleting chat session:", error);
+      return res.status(500).json({
+        error: "Internal server error: Failed to delete chat session",
+        details: error?.message || String(error)
+      });
+    }
+  };
+  app2.delete("/api/chat/:chatId", requireAuth, handleDeleteChatSession);
+  app2.delete("/api/conversations/:chatId", requireAuth, handleDeleteChatSession);
   app2.post("/api/chat", requireAuth, async (req, res) => {
     const { query, conversationId } = req.body;
     const userId = req.user.uid;

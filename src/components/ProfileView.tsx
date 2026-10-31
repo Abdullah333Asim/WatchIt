@@ -4,16 +4,34 @@ import { User, Fingerprint, ChevronRight, Moon, Tv, Shield } from "lucide-react"
 import { fetchWithUser } from "../lib/api";
 import { logout } from "../lib/firebase.ts";
 
-export default function ProfileView({ onViewList }: { onViewList: (type: 'Watched' | 'Watchlist') => void }) {
+export default function ProfileView({ onViewList }: { onViewList: (type: 'Watched' | 'Watchlist' | 'Pass') => void }) {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(() => {
+    return !!window.history.state?.profileEditing;
+  });
   const [selectedMovie, setSelectedMovie] = useState<any>(null);
   
   const [editName, setEditName] = useState("");
   const [editBio, setEditBio] = useState("");
   const [editAvatar, setEditAvatar] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
+  const isEditingRef = useRef(isEditing);
+  const profileRef = useRef(profile);
+  const selectedMovieRef = useRef(selectedMovie);
+
+  useEffect(() => {
+    isEditingRef.current = isEditing;
+  }, [isEditing]);
+
+  useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
+
+  useEffect(() => {
+    selectedMovieRef.current = selectedMovie;
+  }, [selectedMovie]);
 
   const [cols, setCols] = useState(4);
 
@@ -53,6 +71,51 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
       });
   }, []);
 
+  // Listen to popstate to trap back button for Edit Profile mode and movie modal
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      // 1. Movie modal
+      const hasMovieModal = !!event.state?.movieModal;
+      if (selectedMovieRef.current && !hasMovieModal) {
+        setSelectedMovie(null);
+      }
+
+      // 2. Profile edit mode
+      const hasEditing = !!event.state?.profileEditing;
+      if (isEditingRef.current && !hasEditing) {
+        setIsEditing(false);
+        if (profileRef.current) {
+          setEditName(profileRef.current.name || "");
+          setEditBio(profileRef.current.bio || "");
+          setEditAvatar(profileRef.current.avatar_url || "");
+        }
+      } else if (!isEditingRef.current && hasEditing) {
+        setIsEditing(true);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handleStartEdit = () => {
+    setIsEditing(true);
+    window.history.pushState({ ...window.history.state, profileEditing: true }, '');
+  };
+
+  const handleCancelEdit = () => {
+    if (window.history.state?.profileEditing) {
+      window.history.back();
+    } else {
+      setIsEditing(false);
+      if (profile) {
+        setEditName(profile.name || "");
+        setEditBio(profile.bio || "");
+        setEditAvatar(profile.avatar_url || "");
+      }
+    }
+  };
+
   const handleSave = async () => {
     if (isSaving) return;
     setIsSaving(true);
@@ -66,12 +129,29 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
       });
       if (res.ok) {
         setProfile({ ...profile, name: editName, bio: editBio, avatar_url: editAvatar });
-        setIsEditing(false);
+        if (window.history.state?.profileEditing) {
+          window.history.back();
+        } else {
+          setIsEditing(false);
+        }
       }
     } catch (e) {
       console.error(e);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSelectMovie = (movie: any) => {
+    setSelectedMovie(movie);
+    window.history.pushState({ ...window.history.state, movieModal: true }, '');
+  };
+
+  const handleCloseMovie = () => {
+    if (window.history.state?.movieModal) {
+      window.history.back();
+    } else {
+      setSelectedMovie(null);
     }
   };
 
@@ -94,7 +174,7 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
           ...prev,
           history: prev.history.filter((h: any) => h.movie_id !== movieId && h.id !== movieId)
         }));
-        setSelectedMovie(null);
+        handleCloseMovie();
       }
     } catch (e) {
       console.error(e);
@@ -113,15 +193,35 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
           ...prev,
           history: prev.history.map((h: any) => (h.movie_id === movieId || h.id === movieId) ? { ...h, action: 'Watched' } : h)
         }));
-        setSelectedMovie(null);
+        handleCloseMovie();
       }
     } catch (e) {
       console.error(e);
     }
   };
 
-  const renderMovieList = (title: string, actionType: 'Watchlist' | 'Watched') => {
+  const handleMoveToWatchlist = async (movieId: string) => {
+    try {
+      const res = await fetchWithUser(`/api/swipe/${movieId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'Watchlist' })
+      });
+      if (res.ok) {
+        setProfile((prev: any) => ({
+          ...prev,
+          history: prev.history.map((h: any) => (h.movie_id === movieId || h.id === movieId) ? { ...h, action: 'Watchlist' } : h)
+        }));
+        handleCloseMovie();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const renderMovieList = (title: string, actionType: 'Watchlist' | 'Watched' | 'Pass') => {
     const list = profile.history.filter((h: any) => h.action === actionType);
+    if (actionType === 'Pass' && list.length === 0) return null;
     const showViewAllCard = list.length > cols;
     const displayList = list.slice(0, showViewAllCard ? cols - 1 : cols);
     const remainingCount = list.length - (cols - 1);
@@ -134,7 +234,7 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
         </div>
         <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-3 sm:gap-4">
           {displayList.map((movie: any) => (
-            <div key={movie.id} onClick={() => setSelectedMovie(movie)} className="group relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 shadow-xl border border-white/5">
+            <div key={movie.id} onClick={() => handleSelectMovie(movie)} className="group relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 shadow-xl border border-white/5">
               <img src={movie.poster_url || undefined} className="w-full h-full object-cover" alt={movie.title ? `Poster for ${movie.title}` : "Movie poster"} />
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
               <div className="absolute bottom-0 left-0 w-full p-2 glass-panel !border-0 !rounded-none translate-y-2 group-hover:translate-y-0 transition-transform">
@@ -218,11 +318,11 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
             {isEditing ? (
               <>
                 <button onClick={handleSave} disabled={isSaving} className={`text-white text-sm font-semibold transition-colors ${isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:text-[#c9c6c5]'}`}>{isSaving ? 'Saving...' : 'Save'}</button>
-                <button onClick={() => setIsEditing(false)} disabled={isSaving} className={`text-white/40 text-sm font-medium transition-colors ${isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:text-white'}`}>Cancel</button>
+                <button onClick={handleCancelEdit} disabled={isSaving} className={`text-white/40 text-sm font-medium transition-colors ${isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:text-white'}`}>Cancel</button>
               </>
             ) : (
               <>
-                <button onClick={() => setIsEditing(true)} className="text-white text-sm font-semibold hover:text-[#c9c6c5] transition-colors">Edit</button>
+                <button onClick={handleStartEdit} className="text-white text-sm font-semibold hover:text-[#c9c6c5] transition-colors">Edit</button>
                 <button onClick={async () => { localStorage.removeItem('guest_token'); await logout(); window.location.reload(); }} className="text-white/40 text-sm font-medium hover:text-red-400 transition-colors">Log Out</button>
               </>
             )}
@@ -233,55 +333,140 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
       <div className="flex flex-col gap-8">
         {renderMovieList('My Watchlist', 'Watchlist')}
         {renderMovieList('Watched', 'Watched')}
+        {renderMovieList('Not Watched', 'Pass')}
       </div>
+
       <AnimatePresence>
-        {selectedMovie && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" 
-            onClick={() => setSelectedMovie(null)}
-          >
+        {selectedMovie && (() => {
+          const imdbId = selectedMovie.imdb_id || selectedMovie.imdbId;
+          const imdbUrl = imdbId ? `https://www.imdb.com/title/${imdbId}/` : null;
+
+          return (
             <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#1c1b1b] border border-white/10 p-6 rounded-3xl max-w-xs w-full shadow-2xl" 
-              onClick={e => e.stopPropagation()}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" 
+              onClick={handleCloseMovie}
             >
-              <div className="flex gap-4 mb-6">
-                <img src={selectedMovie.poster_url} className="w-16 h-24 object-cover rounded-lg shadow-md border border-white/5" alt={selectedMovie.title ? `Poster for ${selectedMovie.title}` : "Movie poster"} />
-                <div className="flex flex-col justify-center overflow-hidden">
-                  <h3 className="text-lg font-bold text-white mb-1 leading-tight truncate">{selectedMovie.title}</h3>
-                  <p className="text-white/60 text-sm">{selectedMovie.year}</p>
+              <motion.div 
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-[#1c1b1b] border border-white/10 p-6 rounded-3xl max-w-xs w-full shadow-2xl" 
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex gap-4 mb-6">
+                  {imdbUrl ? (
+                    <a
+                      href={imdbUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 transition-transform hover:scale-105"
+                      title="Open in IMDb"
+                    >
+                      <img 
+                        src={selectedMovie.poster_url} 
+                        className="w-16 h-24 object-cover rounded-md shadow-md border border-white/5" 
+                        alt={selectedMovie.title ? `Poster for ${selectedMovie.title}` : "Movie poster"} 
+                      />
+                    </a>
+                  ) : (
+                    <div className="shrink-0">
+                      <img 
+                        src={selectedMovie.poster_url} 
+                        className="w-16 h-24 object-cover rounded-md shadow-md border border-white/5" 
+                        alt={selectedMovie.title ? `Poster for ${selectedMovie.title}` : "Movie poster"} 
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex flex-col justify-center overflow-hidden">
+                    {imdbUrl ? (
+                      <a
+                        href={imdbUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:underline hover:text-[#F5C518] transition-colors"
+                        title="Open in IMDb"
+                      >
+                        <h3 className="text-lg font-bold text-white mb-1 leading-tight truncate">
+                          {selectedMovie.title}
+                        </h3>
+                      </a>
+                    ) : (
+                      <h3 className="text-lg font-bold text-white mb-1 leading-tight truncate">
+                        {selectedMovie.title}
+                      </h3>
+                    )}
+                    <p className="text-white/60 text-sm">{selectedMovie.year}</p>
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-3">
-                {selectedMovie.action === 'Watchlist' && (
+
+                <div className="space-y-3">
+                  {selectedMovie.action === 'Watchlist' && (
+                    <button 
+                      onClick={() => handleMoveToWatched(selectedMovie.id)}
+                      className="w-full py-3 bg-white text-black text-sm font-bold rounded-xl hover:bg-gray-200 transition-colors shadow-lg"
+                    >
+                      Mark as Watched
+                    </button>
+                  )}
+
+                  {selectedMovie.action === 'Pass' && (
+                    <>
+                      <button 
+                        onClick={() => handleMoveToWatchlist(selectedMovie.id)}
+                        className="w-full py-3 bg-[#f59e0b] hover:bg-[#d97706] text-black text-sm font-bold rounded-xl transition-colors shadow-lg"
+                      >
+                        Add to Watchlist
+                      </button>
+                      <button 
+                        onClick={() => handleMoveToWatched(selectedMovie.id)}
+                        className="w-full py-3 bg-white text-black text-sm font-bold rounded-xl hover:bg-gray-200 transition-colors shadow-lg"
+                      >
+                        Mark as Watched
+                      </button>
+                    </>
+                  )}
+
+                  {imdbUrl ? (
+                    <a
+                      href={imdbUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-3 bg-[#F5C518] hover:bg-[#e2b616] text-black text-sm font-bold rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-center"
+                    >
+                      Open in IMDb
+                    </a>
+                  ) : (
+                    <button
+                      disabled
+                      className="w-full py-3 bg-[#F5C518]/40 text-black/50 text-sm font-bold rounded-xl cursor-not-allowed flex items-center justify-center gap-2 text-center"
+                      title="IMDb link not available"
+                    >
+                      Open in IMDb
+                    </button>
+                  )}
+
                   <button 
-                    onClick={() => handleMoveToWatched(selectedMovie.id)}
-                    className="w-full py-3 bg-white text-black text-sm font-bold rounded-xl hover:bg-gray-200 transition-colors shadow-lg"
+                    onClick={() => handleRemove(selectedMovie.id)}
+                    className="w-full py-3 bg-red-500/10 text-red-500 text-sm font-bold rounded-xl hover:bg-red-500/20 transition-colors"
                   >
-                    Mark as Watched
+                    {selectedMovie.action === 'Pass' ? 'Reset to Swipe Queue' : `Remove from ${selectedMovie.action}`}
                   </button>
-                )}
-                <button 
-                  onClick={() => handleRemove(selectedMovie.id)}
-                  className="w-full py-3 bg-red-500/10 text-red-500 text-sm font-bold rounded-xl hover:bg-red-500/20 transition-colors"
-                >
-                  Remove from {selectedMovie.action}
-                </button>
-                <button 
-                  onClick={() => setSelectedMovie(null)}
-                  className="w-full py-3 bg-transparent text-white/60 text-sm font-bold rounded-xl hover:text-white transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
+
+                  <button 
+                    onClick={handleCloseMovie}
+                    className="w-full py-3 bg-transparent text-white/60 text-sm font-bold rounded-xl hover:text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
+          );
+        })()}
       </AnimatePresence>
     </div>
   );

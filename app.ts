@@ -140,8 +140,63 @@ export function createApp() {
 
     try {
       await loadPopularMovies(page);
-      const moviesResult = await db.execute(sql`SELECT * FROM movies WHERE id NOT IN (SELECT movie_id FROM swipes WHERE user_id = ${userId}) ORDER BY RANDOM() LIMIT 10`);
-      res.json(moviesResult.rows || moviesResult);
+
+      // Smart Cooldown: Exclude Watched, Watchlist, Not Interested permanently,
+      // and exclude 'Pass' ("Not Watched") swiped within the last 7 days.
+      let moviesResult = await db.execute(sql`
+        SELECT * FROM movies 
+        WHERE id NOT IN (
+          SELECT movie_id FROM swipes 
+          WHERE user_id = ${userId} 
+          AND (
+            action IN ('Watched', 'Watchlist', 'Not Interested')
+            OR (action = 'Pass' AND timestamp > NOW() - INTERVAL '7 days')
+          )
+        ) 
+        ORDER BY RANDOM() 
+        LIMIT 10
+      `);
+      let rows = (moviesResult.rows || moviesResult) as any[];
+
+      // If user has swiped most movies in DB, auto-load subsequent TMDB pages to stock fresh movies!
+      if (rows.length < 10) {
+        for (let p = page + 1; p <= page + 3; p++) {
+          await loadPopularMovies(p);
+          moviesResult = await db.execute(sql`
+            SELECT * FROM movies 
+            WHERE id NOT IN (
+              SELECT movie_id FROM swipes 
+              WHERE user_id = ${userId} 
+              AND (
+                action IN ('Watched', 'Watchlist', 'Not Interested')
+                OR (action = 'Pass' AND timestamp > NOW() - INTERVAL '7 days')
+              )
+            ) 
+            ORDER BY RANDOM() 
+            LIMIT 10
+          `);
+          rows = (moviesResult.rows || moviesResult) as any[];
+          if (rows.length >= 10) break;
+        }
+      }
+
+      // Fallback: If still under 10 (user has swiped through all available TMDB pages),
+      // recycle older 'Pass' movies so the deck stays alive! (Never recycles Watched/Watchlist/Not Interested).
+      if (rows.length < 10) {
+        const fallbackResult = await db.execute(sql`
+          SELECT * FROM movies 
+          WHERE id NOT IN (
+            SELECT movie_id FROM swipes 
+            WHERE user_id = ${userId} 
+            AND action IN ('Watched', 'Watchlist', 'Not Interested')
+          ) 
+          ORDER BY RANDOM() 
+          LIMIT 10
+        `);
+        rows = (fallbackResult.rows || fallbackResult) as any[];
+      }
+
+      res.json(rows);
     } catch (error) {
       console.error("Get movies error", error);
       res.status(500).json({ error: "Internal server error" });
@@ -183,7 +238,7 @@ export function createApp() {
     const { action } = req.body;
     const userId = (req as AuthRequest).user!.uid;
     try {
-      await db.update(swipes).set({ action }).where(and(eq(swipes.userId, userId), eq(swipes.movieId, movieId)));
+      await db.update(swipes).set({ action, timestamp: new Date() }).where(and(eq(swipes.userId, userId), eq(swipes.movieId, movieId)));
       res.json({ success: true });
     } catch (error) {
       console.error("Put swipe error", error);
@@ -251,6 +306,65 @@ export function createApp() {
       res.status(500).json({ error: "Internal server error" });
     }
   });
+
+  const handleDeleteChatSession = async (req: express.Request, res: express.Response) => {
+    const chatId = (req.params.chatId || req.params.id)?.trim();
+    const user = (req as AuthRequest).user;
+    const userId = user?.uid || user?.id || user?.sub;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized: Missing user identity" });
+    }
+
+    if (!chatId) {
+      return res.status(400).json({ error: "chatId parameter is required" });
+    }
+
+    try {
+      // 1. Verify the chat session exists and belongs to the authenticated user
+      const convo = (
+        await db
+          .select()
+          .from(conversations)
+          .where(and(eq(conversations.id, chatId), eq(conversations.userId, userId)))
+      ).at(0);
+
+      if (!convo) {
+        const anyConvo = (
+          await db
+            .select({ id: conversations.id })
+            .from(conversations)
+            .where(eq(conversations.id, chatId))
+        ).at(0);
+
+        if (!anyConvo) {
+          return res.status(404).json({ error: "Chat session not found" });
+        }
+        return res.status(403).json({ error: "Forbidden: You do not have permission to delete this chat session" });
+      }
+
+      // 2. Explicitly delete all child messages first to satisfy foreign key constraints
+      await db
+        .delete(messages)
+        .where(eq(messages.conversationId, chatId));
+
+      // 3. Delete the parent conversation session
+      await db
+        .delete(conversations)
+        .where(and(eq(conversations.id, chatId), eq(conversations.userId, userId)));
+
+      return res.json({ success: true, message: "Chat deleted successfully" });
+    } catch (error: any) {
+      console.error("[DELETE /api/chat/:chatId] Error deleting chat session:", error);
+      return res.status(500).json({ 
+        error: "Internal server error: Failed to delete chat session",
+        details: error?.message || String(error)
+      });
+    }
+  };
+
+  app.delete("/api/chat/:chatId", requireAuth, handleDeleteChatSession);
+  app.delete("/api/conversations/:chatId", requireAuth, handleDeleteChatSession);
 
   app.post("/api/chat", requireAuth, async (req, res) => {
     const { query, conversationId } = req.body;

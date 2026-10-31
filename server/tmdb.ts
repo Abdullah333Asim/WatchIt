@@ -40,44 +40,57 @@ export async function loadPopularMovies(page: number = 1) {
     const data = await res.json();
     
     if (data.results && Array.isArray(data.results)) {
-       for (const m of data.results) {
-         if (!m.poster_path) continue;
+       await Promise.all(
+         data.results.map(async (m: any) => {
+           if (!m.poster_path) return;
 
-         // Skip the expensive per-movie detail call if this movie is already in the DB.
-         // This prevents ~20 sequential TMDB HTTP calls on every /api/movies request.
-         const existing = (await db.execute(sql`SELECT id FROM movies WHERE id = ${m.id.toString()}`)).rows?.[0];
-         if (existing) continue;
+           // Skip the expensive per-movie detail call if this movie is already in the DB and has imdb_id.
+           const existing = (await db.execute(sql`SELECT id, imdb_id FROM movies WHERE id = ${m.id.toString()}`)).rows?.[0] as any;
+           if (existing && existing.imdb_id) return;
 
-         const year = m.release_date ? parseInt(m.release_date.split('-')[0]) : 0;
-         const genres = (m.genre_ids || []).map((id: number) => GENRES[id]).filter(Boolean).join(', ');
-         
-         let duration = '120m';
-         try {
-           const detailRes = await fetch(`${TMDB_BASE_URL}/movie/${m.id}?api_key=${TMDB_API_KEY}&language=en-US`);
-           if (detailRes.ok) {
-             const detailData = await detailRes.json();
-             if (detailData.runtime) {
-               duration = `${detailData.runtime}m`;
+           const year = m.release_date ? parseInt(m.release_date.split('-')[0]) : 0;
+           const genres = (m.genre_ids || []).map((id: number) => GENRES[id]).filter(Boolean).join(', ');
+           
+           let duration = '120m';
+           let imdbId: string | null = null;
+           try {
+             const detailRes = await fetch(`${TMDB_BASE_URL}/movie/${m.id}?api_key=${TMDB_API_KEY}&language=en-US`);
+             if (detailRes.ok) {
+               const detailData = await detailRes.json();
+               if (detailData.runtime) {
+                 duration = `${detailData.runtime}m`;
+               }
+               if (detailData.imdb_id) {
+                 imdbId = detailData.imdb_id;
+               }
              }
+           } catch(e) {
+             console.error("Failed to fetch movie detail", e);
            }
-         } catch(e) {
-           console.error("Failed to fetch movie detail", e);
-         }
-         
-         try {
-           await db.insert(movies).values({
-             id: m.id.toString(),
-             title: m.title,
-             year,
-             genre: genres || 'Unknown',
-             duration: duration,
-             synopsis: m.overview || 'No synopsis available.',
-             posterUrl: `https://image.tmdb.org/t/p/w500${m.poster_path}`,
-             rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0
-           }).onConflictDoNothing();
-         } catch (e) {
-         }
-       }
+           
+           try {
+             await db.insert(movies).values({
+               id: m.id.toString(),
+               title: m.title,
+               year,
+               genre: genres || 'Unknown',
+               duration: duration,
+               synopsis: m.overview || 'No synopsis available.',
+               posterUrl: `https://image.tmdb.org/t/p/w500${m.poster_path}`,
+               rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0,
+               imdbId: imdbId
+             }).onConflictDoUpdate({
+               target: movies.id,
+               set: {
+                 imdbId: imdbId || sql`movies.imdb_id`,
+                 duration: duration,
+                 rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0
+               }
+             });
+           } catch (e) {
+           }
+         })
+       );
        return true;
     }
   } catch (e) {
@@ -113,12 +126,16 @@ export async function searchMovieAndSave(title: string, yearStr?: string) {
       const genres = (m.genre_ids || []).map((id: number) => GENRES[id]).filter(Boolean).join(', ');
       
       let duration = '120m';
+      let imdbId: string | null = null;
       try {
         const detailRes = await fetch(`${TMDB_BASE_URL}/movie/${m.id}?api_key=${TMDB_API_KEY}&language=en-US`);
         if (detailRes.ok) {
           const detailData = await detailRes.json();
           if (detailData.runtime) {
             duration = `${detailData.runtime}m`;
+          }
+          if (detailData.imdb_id) {
+            imdbId = detailData.imdb_id;
           }
         }
       } catch(e) {}
@@ -134,14 +151,16 @@ export async function searchMovieAndSave(title: string, yearStr?: string) {
           duration,
           synopsis: m.overview || 'No synopsis available.',
           posterUrl: poster_url,
-          rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0
+          rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0,
+          imdbId: imdbId
         }).onConflictDoUpdate({
           target: movies.id,
           set: {
             posterUrl: poster_url,
             title: m.title,
             year,
-            rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0
+            rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0,
+            imdbId: imdbId || sql`movies.imdb_id`
           }
         });
       } catch (e) {}
@@ -151,7 +170,8 @@ export async function searchMovieAndSave(title: string, yearStr?: string) {
         title: m.title,
         year,
         poster_url,
-        rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0
+        rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0,
+        imdb_id: imdbId
       };
     }
   } catch (e) {
