@@ -1,20 +1,45 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { User, Fingerprint, ChevronRight, Moon, Tv, Shield } from "lucide-react";
+import { User, Fingerprint, ChevronRight, Moon, Tv, Shield, Play, X } from "lucide-react";
 import { fetchWithUser } from "../lib/api";
 import { logout } from "../lib/firebase.ts";
 
+let cachedProfile: any = null;
+
 export default function ProfileView({ onViewList }: { onViewList: (type: 'Watched' | 'Watchlist' | 'Pass') => void }) {
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<any>(cachedProfile);
+  const [loading, setLoading] = useState(!cachedProfile);
   const [isEditing, setIsEditing] = useState(() => {
     return !!window.history.state?.profileEditing;
   });
   const [selectedMovie, setSelectedMovie] = useState<any>(null);
+  const [currentTrailerKey, setCurrentTrailerKey] = useState<string | null>(null);
+  const [activeTrailerKey, setActiveTrailerKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedMovie) {
+      setCurrentTrailerKey(null);
+      setActiveTrailerKey(null);
+      return;
+    }
+    const key = selectedMovie.trailer_key || (selectedMovie as any).trailerKey;
+    if (key) {
+      setCurrentTrailerKey(key);
+    } else {
+      fetchWithUser(`/api/movies/${selectedMovie.id}/trailer`)
+        .then(res => res.ok ? res.json() : { trailer_key: null })
+        .then(data => {
+          if (data?.trailer_key) {
+            setCurrentTrailerKey(data.trailer_key);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [selectedMovie]);
   
-  const [editName, setEditName] = useState("");
-  const [editBio, setEditBio] = useState("");
-  const [editAvatar, setEditAvatar] = useState("");
+  const [editName, setEditName] = useState(() => cachedProfile?.name || "");
+  const [editBio, setEditBio] = useState(() => cachedProfile?.bio || "");
+  const [editAvatar, setEditAvatar] = useState(() => cachedProfile?.avatar_url || "");
   const [isSaving, setIsSaving] = useState(false);
 
   const isEditingRef = useRef(isEditing);
@@ -50,8 +75,10 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    fetchWithUser('/api/profile')
-      .then(res => {
+    Promise.all([
+      fetchWithUser('/api/profile')
+    ])
+      .then(async ([res]) => {
         if (!res.ok) {
           localStorage.removeItem('guest_token');
           logout().then(() => window.location.reload());
@@ -60,14 +87,18 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
         return res.json();
       })
       .then(data => {
+        cachedProfile = data;
         setProfile(data);
-        setEditName(data.name || "");
-        setEditBio(data.bio || "");
-        setEditAvatar(data.avatar_url || "");
+        if (!isEditingRef.current) {
+          setEditName(data.name || "");
+          setEditBio(data.bio || "");
+          setEditAvatar(data.avatar_url || "");
+        }
         setLoading(false);
       })
       .catch(err => {
         console.error(err);
+        setLoading(false);
       });
   }, []);
 
@@ -170,6 +201,7 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
     try {
       const res = await fetchWithUser(`/api/swipe/${movieId}`, { method: 'DELETE' });
       if (res.ok) {
+        cachedProfile = { ...cachedProfile, history: cachedProfile?.history?.filter((h: any) => h.movie_id !== movieId && h.id !== movieId) };
         setProfile((prev: any) => ({
           ...prev,
           history: prev.history.filter((h: any) => h.movie_id !== movieId && h.id !== movieId)
@@ -235,7 +267,7 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
         <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-3 sm:gap-4">
           {displayList.map((movie: any) => (
             <div key={movie.id} onClick={() => handleSelectMovie(movie)} className="group relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 shadow-xl border border-white/5">
-              <img src={movie.poster_url || undefined} className="w-full h-full object-cover" alt={movie.title ? `Poster for ${movie.title}` : "Movie poster"} />
+              <img src={movie.poster_url || undefined} loading="lazy" decoding="async" className="w-full h-full object-cover" alt={movie.title ? `Poster for ${movie.title}` : "Movie poster"} />
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
               <div className="absolute bottom-0 left-0 w-full p-2 glass-panel !border-0 !rounded-none translate-y-2 group-hover:translate-y-0 transition-transform">
                 <h3 className="text-[10px] sm:text-xs font-bold text-white truncate px-1">{movie.title}</h3>
@@ -244,7 +276,7 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
           ))}
           {showViewAllCard && (
             <div onClick={() => onViewList(actionType)} className="group relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 shadow-xl border border-white/5 bg-[#1c1b1b] flex flex-col items-center justify-center">
-               <img src={list[cols - 1].poster_url || undefined} className="w-full h-full object-cover opacity-20 group-hover:opacity-10 transition-opacity" alt={list[cols - 1]?.title ? `Poster for ${list[cols - 1].title}` : "More movies preview"} />
+               <img src={list[cols - 1].poster_url || undefined} loading="lazy" decoding="async" className="w-full h-full object-cover opacity-20 group-hover:opacity-10 transition-opacity" alt={list[cols - 1]?.title ? `Poster for ${list[cols - 1].title}` : "More movies preview"} />
                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none">
                  <div className="w-8 h-8 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
                     <ChevronRight className="w-4 h-4 text-white" />
@@ -267,6 +299,8 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
         <div className="relative w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden border-2 border-[#c9c6c5] shadow-[0_0_30px_rgba(201,198,197,0.1)] shrink-0 bg-[#2b2a2a] group">
           <img 
             alt={profile?.name ? `${profile.name}'s profile avatar` : "User profile avatar"} 
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover" 
             src={isEditing ? (editAvatar || profile.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuCIt82W2GZJFZbpWzZdY2X3ER7_6qkzNy4sk2HEPEyl0HxBJj68_Qe4uN8tvz57BTwNl3D1TffunDYTzKR-fi1GpIAzbKQGv_oj4bdc6s36jxHsjP8Mz-ceoxqbOTh38HWIKKi1269tq191KhzH3TarrD3uKRcCyw4fv1VN8aa7I8TIWppe-BT4kbqH51ksxDLMaZ4hGvLTOcuqtlhqern2xwX8afDRtOid2RfkRXSowZVMyD0lj6OmkaOFGHt8O3A4n-L-GGORooiY") : (profile.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuCIt82W2GZJFZbpWzZdY2X3ER7_6qkzNy4sk2HEPEyl0HxBJj68_Qe4uN8tvz57BTwNl3D1TffunDYTzKR-fi1GpIAzbKQGv_oj4bdc6s36jxHsjP8Mz-ceoxqbOTh38HWIKKi1269tq191KhzH3TarrD3uKRcCyw4fv1VN8aa7I8TIWppe-BT4kbqH51ksxDLMaZ4hGvLTOcuqtlhqern2xwX8afDRtOid2RfkRXSowZVMyD0lj6OmkaOFGHt8O3A4n-L-GGORooiY")}
           />
@@ -367,6 +401,8 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
                     >
                       <img 
                         src={selectedMovie.poster_url} 
+                        loading="lazy"
+                        decoding="async"
                         className="w-16 h-24 object-cover rounded-md shadow-md border border-white/5" 
                         alt={selectedMovie.title ? `Poster for ${selectedMovie.title}` : "Movie poster"} 
                       />
@@ -375,6 +411,8 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
                     <div className="shrink-0">
                       <img 
                         src={selectedMovie.poster_url} 
+                        loading="lazy"
+                        decoding="async"
                         className="w-16 h-24 object-cover rounded-md shadow-md border border-white/5" 
                         alt={selectedMovie.title ? `Poster for ${selectedMovie.title}` : "Movie poster"} 
                       />
@@ -430,6 +468,16 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
                     </>
                   )}
 
+                  {currentTrailerKey && (
+                    <button 
+                      onClick={() => setActiveTrailerKey(currentTrailerKey)}
+                      className="w-full py-3 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Play className="w-4 h-4 fill-current" />
+                      Watch Trailer
+                    </button>
+                  )}
+
                   {imdbUrl ? (
                     <a
                       href={imdbUrl}
@@ -440,13 +488,15 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
                       Open in IMDb
                     </a>
                   ) : (
-                    <button
-                      disabled
-                      className="w-full py-3 bg-[#F5C518]/40 text-black/50 text-sm font-bold rounded-xl cursor-not-allowed flex items-center justify-center gap-2 text-center"
-                      title="IMDb link not available"
+                    <a
+                      href={`https://www.themoviedb.org/movie/${selectedMovie.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ backgroundColor: 'rgb(3, 37, 65)' }}
+                      className="w-full py-3 hover:opacity-90 text-white text-sm font-bold rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-center cursor-pointer"
                     >
-                      Open in IMDb
-                    </button>
+                      Open in TMDb
+                    </a>
                   )}
 
                   <button 
@@ -467,6 +517,54 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
             </motion.div>
           );
         })()}
+      </AnimatePresence>
+
+      {/* In-App Trailer Video Modal */}
+      <AnimatePresence>
+        {activeTrailerKey && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] flex items-center justify-center p-4 sm:p-6 bg-black/90 backdrop-blur-md"
+            onClick={() => setActiveTrailerKey(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.92, opacity: 0, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="relative w-full max-w-3xl bg-[#141414] border border-white/10 rounded-md overflow-hidden shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#181818]">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse" />
+                  <span className="text-xs sm:text-sm font-bold text-white truncate max-w-xs sm:max-w-md">
+                    {selectedMovie?.title ? `${selectedMovie.title} - Official Trailer` : "Movie Trailer"}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setActiveTrailerKey(null)}
+                  className="p-1 rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  aria-label="Close trailer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="relative aspect-video w-full bg-black">
+                <iframe
+                  src={`https://www.youtube.com/embed/${activeTrailerKey}?autoplay=1&rel=0`}
+                  title={`${selectedMovie?.title || 'Movie'} Trailer`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="w-full h-full border-0 rounded-b-md"
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );

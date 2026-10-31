@@ -6,7 +6,7 @@ import { eq, and, sql, desc } from "drizzle-orm";
 import { getRecommendations } from "./server/gemini";
 import { randomUUID } from "crypto";
 import { requireAuth, AuthRequest } from "./server/middleware";
-import { loadPopularMovies, searchMovieAndSave } from "./server/tmdb";
+import { loadPopularMovies, searchMovieAndSave, fetchMovieTrailer } from "./server/tmdb";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
@@ -134,6 +134,29 @@ export function createApp() {
     }
   });
 
+  app.get("/api/movies/:id/trailer", requireAuth, async (req, res) => {
+    const { id } = req.params;
+    try {
+      const movieRow = (await db.execute(sql`SELECT trailer_key FROM movies WHERE id = ${id}`)).rows?.[0] as any;
+      if (movieRow && movieRow.trailer_key) {
+        return res.json({ trailer_key: movieRow.trailer_key });
+      }
+
+      const trailerKey = await fetchMovieTrailer(id);
+      if (trailerKey) {
+        try {
+          await db.update(movies).set({ trailerKey }).where(eq(movies.id, id));
+        } catch (_) {}
+        return res.json({ trailer_key: trailerKey });
+      }
+
+      res.json({ trailer_key: null });
+    } catch (error) {
+      console.error("Get trailer error", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/movies", requireAuth, async (req, res) => {
     const userId = (req as AuthRequest).user!.uid;
     const page = parseInt(req.query.page as string) || 1;
@@ -249,14 +272,40 @@ export function createApp() {
   app.get("/api/profile", requireAuth, async (req, res) => {
     const userId = (req as AuthRequest).user!.uid;
     try {
-      const user = (await db.select().from(users).where(eq(users.id, userId))).at(0) as any;
-      
+      // Parallel execution: fetch user profile and swipe history concurrently
+      // Optimized projection: only select lightweight fields needed for the grid, excluding heavy synopsis & trailer text
+      const [userRows, historyResult] = await Promise.all([
+        db.select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          bio: users.bio,
+          avatarUrl: users.avatarUrl,
+          tasteDna: users.tasteDna
+        }).from(users).where(eq(users.id, userId)),
+        db.execute(sql`
+          SELECT 
+            m.id, 
+            m.title, 
+            m.year, 
+            m.genre, 
+            m.poster_url, 
+            m.rating, 
+            m.imdb_id, 
+            s.action 
+          FROM swipes s 
+          JOIN movies m ON s.movie_id = m.id 
+          WHERE s.user_id = ${userId} 
+          ORDER BY s.timestamp DESC
+        `)
+      ]);
+
+      const user = userRows[0] as any;
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
 
-      const historyResult = await db.execute(sql`SELECT m.*, s.action FROM movies m JOIN swipes s ON m.id = s.movie_id WHERE s.user_id = ${userId} GROUP BY m.id, s.action ORDER BY MAX(s.timestamp) DESC`);
-      const history = historyResult.rows || historyResult;
+      const history = (historyResult.rows || historyResult) as any[];
       
       res.json({
         ...user,

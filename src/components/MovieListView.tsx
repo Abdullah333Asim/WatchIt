@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Filter, Star, ChevronDown, X, Search, RotateCcw } from "lucide-react";
+import { Filter, Star, ChevronDown, X, Search, RotateCcw, Play } from "lucide-react";
 import { fetchWithUser } from "../lib/api";
 
 interface Movie {
@@ -14,6 +14,7 @@ interface Movie {
   rating: number;
   action?: string;
   imdb_id?: string | null;
+  trailer_key?: string | null;
 }
 
 export default function MovieListView({ listType, onBack }: { listType: 'Watched' | 'Watchlist' | 'Pass', onBack: () => void }) {
@@ -21,6 +22,31 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
   const [loading, setLoading] = useState(true);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
+  const [currentTrailerKey, setCurrentTrailerKey] = useState<string | null>(null);
+  const [activeTrailerKey, setActiveTrailerKey] = useState<string | null>(null);
+  const [displayLimit, setDisplayLimit] = useState(36);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!selectedMovie) {
+      setCurrentTrailerKey(null);
+      setActiveTrailerKey(null);
+      return;
+    }
+    const key = selectedMovie.trailer_key || (selectedMovie as any).trailerKey;
+    if (key) {
+      setCurrentTrailerKey(key);
+    } else {
+      fetchWithUser(`/api/movies/${selectedMovie.id}/trailer`)
+        .then(res => res.ok ? res.json() : { trailer_key: null })
+        .then(data => {
+          if (data?.trailer_key) {
+            setCurrentTrailerKey(data.trailer_key);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [selectedMovie]);
 
   const selectedMovieRef = useRef(selectedMovie);
   useEffect(() => {
@@ -193,6 +219,28 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
     });
   }, [movies, yearFrom, yearTo, selectedGenres, minRating, maxRating, searchQuery]);
 
+  // Reset display count when filters or list type change
+  useEffect(() => {
+    setDisplayLimit(36);
+  }, [yearFrom, yearTo, selectedGenres, minRating, maxRating, searchQuery, listType]);
+
+  // IntersectionObserver to incrementally load more cards as user scrolls (prevents rendering 500+ DOM nodes at once)
+  useEffect(() => {
+    if (!loadMoreRef.current) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        setDisplayLimit(prev => prev + 36);
+      }
+    }, { rootMargin: '350px' });
+
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [filteredMovies.length, displayLimit]);
+
+  const visibleMovies = useMemo(() => {
+    return filteredMovies.slice(0, displayLimit);
+  }, [filteredMovies, displayLimit]);
+
   const filterSidebarContent = (
     <div className="space-y-6">
       {/* Release Year Range */}
@@ -321,7 +369,7 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
           {(minRating > 0 || maxRating < 10) && (
             <button 
               onClick={() => { setMinRating(0); setMaxRating(10); }} 
-              className="text-[11px] text-[#00dce5] hover:underline"
+              className="text-[11px] text-yellow-400 hover:underline"
             >
               Reset
             </button>
@@ -346,7 +394,7 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
             
             {/* Active highlighted range bar */}
             <div 
-              className="absolute top-0 bottom-0 bg-[#00dce5] rounded-full"
+              className="absolute top-0 bottom-0 bg-yellow-400 rounded-full"
               style={{
                 left: `${(minRating / 10) * 100}%`,
                 right: `${100 - (maxRating / 10) * 100}%`
@@ -401,7 +449,7 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
                 onClick={() => { setMinRating(p.min); setMaxRating(p.max); }}
                 className={`flex-1 py-1 rounded text-[11px] font-medium transition-all text-center ${
                   isSelected 
-                    ? 'bg-[#00dce5] text-black font-semibold' 
+                    ? 'bg-yellow-400 text-black font-bold' 
                     : 'bg-white/5 hover:bg-white/10 text-white/60 hover:text-white border border-white/5'
                 }`}
               >
@@ -418,12 +466,12 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
     <div className="w-full px-4 sm:px-6 lg:px-8 py-6 pb-32 flex flex-col md:flex-row gap-6 lg:gap-8 relative">
       {/* Desktop Filter Sidebar (Pins flush left on PC view) */}
       <aside className="hidden md:block w-64 lg:w-72 shrink-0 md:sticky md:top-20 self-start">
-        <div className="bg-[#121212] border border-white/10 rounded-lg p-5 shadow-2xl space-y-6">
+        <div className="bg-[#121212] border border-white/10 rounded-md p-5 shadow-2xl space-y-6">
           <div className="flex justify-between items-center pb-3 border-b border-white/10">
             <h3 className="font-bold text-base text-white flex items-center gap-2">
-              <Filter className="w-4 h-4 text-[#00dce5]" /> Filters
+              <Filter className="w-4 h-4 text-yellow-400" /> Filters
               {activeFiltersCount > 0 && (
-                <span className="text-[10px] bg-[#00dce5]/20 text-[#00dce5] px-1.5 py-0.5 rounded-full font-bold">
+                <span className="text-[10px] bg-yellow-400/20 text-yellow-400 px-1.5 py-0.5 rounded-full font-bold">
                   {activeFiltersCount}
                 </span>
               )}
@@ -449,7 +497,7 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
           <div>
             <button 
               onClick={onBack} 
-              className="text-xs font-semibold text-[#00dce5] hover:underline mb-1.5 inline-flex items-center gap-1"
+              className="text-xs font-semibold text-yellow-400 hover:text-yellow-300 hover:underline mb-1.5 inline-flex items-center gap-1"
             >
               &larr; Back to Profile
             </button>
@@ -467,9 +515,9 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
             className="md:hidden bg-[#181818] border border-white/10 px-4 py-2 rounded-md text-sm font-medium flex items-center justify-between gap-2 text-white hover:bg-white/5 self-start"
           >
             <span className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-[#00dce5]" /> Filters
+              <Filter className="w-4 h-4 text-yellow-400" /> Filters
               {activeFiltersCount > 0 && (
-                <span className="text-[10px] bg-[#00dce5] text-black px-1.5 py-0.5 rounded-full font-bold">
+                <span className="text-[10px] bg-yellow-400 text-black px-1.5 py-0.5 rounded-full font-bold">
                   {activeFiltersCount}
                 </span>
               )}
@@ -487,7 +535,7 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
               exit={{ height: 0, opacity: 0 }}
               className="md:hidden overflow-hidden mb-6"
             >
-              <div className="bg-[#121212] border border-white/10 rounded-lg p-5 shadow-2xl space-y-6">
+              <div className="bg-[#121212] border border-white/10 rounded-md p-5 shadow-2xl space-y-6">
                 <div className="flex justify-between items-center pb-3 border-b border-white/10">
                   <span className="text-xs font-bold text-white uppercase tracking-wider">Refine Results</span>
                   {activeFiltersCount > 0 && (
@@ -542,7 +590,7 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
             <AnimatePresence>
-              {filteredMovies.map((movie) => (
+              {visibleMovies.map((movie) => (
                 <motion.div 
                   key={movie.id}
                   layout
@@ -555,6 +603,8 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
                 >
                   <img 
                     src={movie.poster_url} 
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
                     alt={movie.title ? `Poster for ${movie.title}` : "Movie poster"} 
                   />
@@ -574,6 +624,13 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
                 </motion.div>
               ))}
             </AnimatePresence>
+          </div>
+        )}
+
+        {/* Incremental loading sentinel */}
+        {displayLimit < filteredMovies.length && (
+          <div ref={loadMoreRef} className="py-8 flex justify-center items-center">
+            <div className="w-6 h-6 rounded-full border-2 border-t-yellow-400 border-white/10 animate-spin" />
           </div>
         )}
       </main>
@@ -610,6 +667,8 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
                     >
                       <img 
                         src={selectedMovie.poster_url} 
+                        loading="lazy"
+                        decoding="async"
                         className="w-16 h-24 object-cover rounded-md border border-white/10" 
                         alt={selectedMovie.title ? `Poster for ${selectedMovie.title}` : "Movie poster"} 
                       />
@@ -618,6 +677,8 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
                     <div className="shrink-0">
                       <img 
                         src={selectedMovie.poster_url} 
+                        loading="lazy"
+                        decoding="async"
                         className="w-16 h-24 object-cover rounded-md border border-white/10" 
                         alt={selectedMovie.title ? `Poster for ${selectedMovie.title}` : "Movie poster"} 
                       />
@@ -683,6 +744,16 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
                     </>
                   )}
 
+                  {currentTrailerKey && (
+                    <button 
+                      onClick={() => setActiveTrailerKey(currentTrailerKey)}
+                      className="w-full py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-md transition-colors shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      Watch Trailer
+                    </button>
+                  )}
+
                   {imdbUrl ? (
                     <a
                       href={imdbUrl}
@@ -693,13 +764,15 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
                       Open in IMDb
                     </a>
                   ) : (
-                    <button
-                      disabled
-                      className="w-full py-2 bg-[#F5C518]/40 text-black/50 text-xs font-bold rounded-md cursor-not-allowed flex items-center justify-center gap-1.5 text-center"
-                      title="IMDb link not available"
+                    <a
+                      href={`https://www.themoviedb.org/movie/${selectedMovie.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ backgroundColor: 'rgb(3, 37, 65)' }}
+                      className="w-full py-2 hover:opacity-90 text-white text-xs font-bold rounded-md transition-colors shadow-md flex items-center justify-center gap-1.5 text-center cursor-pointer"
                     >
-                      Open in IMDb
-                    </button>
+                      Open in TMDb
+                    </a>
                   )}
 
                   <button 
@@ -720,6 +793,54 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
             </motion.div>
           );
         })()}
+      </AnimatePresence>
+
+      {/* In-App Trailer Video Modal */}
+      <AnimatePresence>
+        {activeTrailerKey && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] flex items-center justify-center p-4 sm:p-6 bg-black/90 backdrop-blur-md"
+            onClick={() => setActiveTrailerKey(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.92, opacity: 0, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="relative w-full max-w-3xl bg-[#141414] border border-white/10 rounded-md overflow-hidden shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#181818]">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse" />
+                  <span className="text-xs sm:text-sm font-bold text-white truncate max-w-xs sm:max-w-md">
+                    {selectedMovie?.title ? `${selectedMovie.title} - Official Trailer` : "Movie Trailer"}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setActiveTrailerKey(null)}
+                  className="p-1 rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  aria-label="Close trailer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="relative aspect-video w-full bg-black">
+                <iframe
+                  src={`https://www.youtube.com/embed/${activeTrailerKey}?autoplay=1&rel=0`}
+                  title={`${selectedMovie?.title || 'Movie'} Trailer`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="w-full h-full border-0 rounded-b-md"
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );

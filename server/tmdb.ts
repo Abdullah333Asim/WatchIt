@@ -45,8 +45,8 @@ export async function loadPopularMovies(page: number = 1) {
            if (!m.poster_path) return;
 
            // Skip the expensive per-movie detail call if this movie is already in the DB and has imdb_id.
-           const existing = (await db.execute(sql`SELECT id, imdb_id FROM movies WHERE id = ${m.id.toString()}`)).rows?.[0] as any;
-           if (existing && existing.imdb_id) return;
+           const existing = (await db.execute(sql`SELECT id, imdb_id, trailer_key FROM movies WHERE id = ${m.id.toString()}`)).rows?.[0] as any;
+           if (existing && existing.imdb_id && existing.trailer_key) return;
 
            const year = m.release_date ? parseInt(m.release_date.split('-')[0]) : 0;
            const genres = (m.genre_ids || []).map((id: number) => GENRES[id]).filter(Boolean).join(', ');
@@ -127,8 +127,9 @@ export async function searchMovieAndSave(title: string, yearStr?: string) {
       
       let duration = '120m';
       let imdbId: string | null = null;
+      let trailerKey: string | null = null;
       try {
-        const detailRes = await fetch(`${TMDB_BASE_URL}/movie/${m.id}?api_key=${TMDB_API_KEY}&language=en-US`);
+        const detailRes = await fetch(`${TMDB_BASE_URL}/movie/${m.id}?api_key=${TMDB_API_KEY}&language=en-US&append_to_response=videos`);
         if (detailRes.ok) {
           const detailData = await detailRes.json();
           if (detailData.runtime) {
@@ -136,6 +137,14 @@ export async function searchMovieAndSave(title: string, yearStr?: string) {
           }
           if (detailData.imdb_id) {
             imdbId = detailData.imdb_id;
+          }
+          if (detailData.videos && Array.isArray(detailData.videos.results)) {
+            const trailer = detailData.videos.results.find((v: any) => v.site === 'YouTube' && v.type === 'Trailer' && v.official)
+              || detailData.videos.results.find((v: any) => v.site === 'YouTube' && v.type === 'Trailer')
+              || detailData.videos.results.find((v: any) => v.site === 'YouTube' && (v.type === 'Teaser' || v.type === 'Clip'));
+            if (trailer && trailer.key) {
+              trailerKey = trailer.key;
+            }
           }
         }
       } catch(e) {}
@@ -152,7 +161,8 @@ export async function searchMovieAndSave(title: string, yearStr?: string) {
           synopsis: m.overview || 'No synopsis available.',
           posterUrl: poster_url,
           rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0,
-          imdbId: imdbId
+          imdbId: imdbId,
+          trailerKey: trailerKey
         }).onConflictDoUpdate({
           target: movies.id,
           set: {
@@ -160,7 +170,8 @@ export async function searchMovieAndSave(title: string, yearStr?: string) {
             title: m.title,
             year,
             rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0,
-            imdbId: imdbId || sql`movies.imdb_id`
+            imdbId: imdbId || sql`movies.imdb_id`,
+            trailerKey: trailerKey || sql`movies.trailer_key`
           }
         });
       } catch (e) {}
@@ -171,11 +182,32 @@ export async function searchMovieAndSave(title: string, yearStr?: string) {
         year,
         poster_url,
         rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0,
-        imdb_id: imdbId
+        imdb_id: imdbId,
+        trailer_key: trailerKey
       };
     }
   } catch (e) {
     console.error("Failed to search movie", e);
+  }
+  return null;
+}
+
+export async function fetchMovieTrailer(id: string): Promise<string | null> {
+  if (!TMDB_API_KEY) return null;
+  try {
+    const res = await fetch(`${TMDB_BASE_URL}/movie/${encodeURIComponent(id)}/videos?api_key=${TMDB_API_KEY}&language=en-US`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.results && Array.isArray(data.results)) {
+      const trailer = data.results.find((v: any) => v.site === 'YouTube' && v.type === 'Trailer' && v.official)
+        || data.results.find((v: any) => v.site === 'YouTube' && v.type === 'Trailer')
+        || data.results.find((v: any) => v.site === 'YouTube' && (v.type === 'Teaser' || v.type === 'Clip'));
+      if (trailer && trailer.key) {
+        return trailer.key;
+      }
+    }
+  } catch (e) {
+    console.error("Failed to fetch trailer from TMDB", e);
   }
   return null;
 }

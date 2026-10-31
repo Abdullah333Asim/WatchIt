@@ -20,7 +20,7 @@ function RecommendationCard({ rec, onAddWatchlist, isAdded }: { rec: any, onAddW
   const showImage = rec.poster_url && !imgError;
 
   return (
-    <div className="bg-black/40 border border-white/10 rounded-xl overflow-hidden flex flex-col shadow-lg">
+    <div className="bg-black/40 border border-white/10 rounded-md overflow-hidden flex flex-col shadow-lg">
       {showImage ? (
         <div className="h-48 w-full shrink-0 relative bg-[#1c1b1b]">
           <img 
@@ -44,9 +44,9 @@ function RecommendationCard({ rec, onAddWatchlist, isAdded }: { rec: any, onAddW
         <div className="flex justify-between items-start gap-2 drop-shadow-md">
           <h3 className="font-display font-bold text-white text-lg leading-tight">{rec.title}</h3>
           <div className="flex flex-col items-end gap-1 shrink-0">
-            <span className="text-xs font-bold bg-black/60 text-white/90 px-2 py-1 rounded-md border border-white/10">{rec.year}</span>
+            <span className="text-xs font-bold bg-black/60 text-white/90 px-2 py-0.5 rounded-sm border border-white/10">{rec.year}</span>
             {rec.rating > 0 && (
-              <span className="text-[10px] font-bold bg-[#f59e0b]/20 text-[#f59e0b] px-2 py-0.5 rounded-md border border-[#f59e0b]/30 flex items-center gap-1">
+              <span className="text-[10px] font-bold bg-[#f59e0b]/20 text-[#f59e0b] px-2 py-0.5 rounded-sm border border-[#f59e0b]/30 flex items-center gap-1">
                 ⭐ {rec.rating}
               </span>
             )}
@@ -62,7 +62,7 @@ function RecommendationCard({ rec, onAddWatchlist, isAdded }: { rec: any, onAddW
             <button 
               onClick={() => onAddWatchlist(rec.movie_id)}
               disabled={isAdded}
-              className="w-full bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold py-2 rounded-lg transition-colors flex items-center justify-center gap-2 border border-white/10 mt-1"
+              className="w-full bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold py-2 rounded-md transition-colors flex items-center justify-center gap-2 border border-white/10 mt-1"
             >
               {isAdded ? <><Sparkles className="w-3 h-3" /> Added to Watchlist</> : <><Plus className="w-3 h-3" /> Add to Watchlist</>}
             </button>

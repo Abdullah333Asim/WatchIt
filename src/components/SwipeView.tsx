@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, useMotionValue, useTransform, useAnimation, AnimatePresence } from "motion/react";
-import { Star, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, X, RotateCcw } from "lucide-react";
+import { Star, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, X, RotateCcw, Play } from "lucide-react";
 import { extractDominantColor } from "../lib/color";
 import { fetchWithUser } from "../lib/api";
 
@@ -14,6 +14,7 @@ interface Movie {
   poster_url: string;
   rating: number;
   imdb_id?: string | null;
+  trailer_key?: string | null;
 }
 
 let cachedMovies: Movie[] = [];
@@ -50,6 +51,29 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
   const [page, setPage] = useState(cachedPage);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [isFetching, setIsFetching] = useState(false);
+  const [currentTrailerKey, setCurrentTrailerKey] = useState<string | null>(null);
+  const [activeTrailerKey, setActiveTrailerKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedMovie) {
+      setCurrentTrailerKey(null);
+      setActiveTrailerKey(null);
+      return;
+    }
+    const key = selectedMovie.trailer_key || (selectedMovie as any).trailerKey;
+    if (key) {
+      setCurrentTrailerKey(key);
+    } else {
+      fetchWithUser(`/api/movies/${selectedMovie.id}/trailer`)
+        .then(res => res.ok ? res.json() : { trailer_key: null })
+        .then(data => {
+          if (data?.trailer_key) {
+            setCurrentTrailerKey(data.trailer_key);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [selectedMovie]);
 
   const selectedMovieRef = useRef(selectedMovie);
   useEffect(() => {
@@ -304,7 +328,7 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
                 <div className="flex justify-between items-start gap-4 mb-3">
                   <h2 className="text-2xl font-display font-bold text-white leading-tight flex-1">{selectedMovie.title}</h2>
                   <div className="flex items-center gap-1 bg-white/10 px-2.5 py-1 rounded-lg shrink-0">
-                    <Star className="w-4 h-4 fill-[#c9c6c5] text-[#c9c6c5]" />
+                    <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                     <span className="text-sm font-bold">{selectedMovie.rating}</span>
                   </div>
                 </div>
@@ -314,16 +338,37 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
                     <span className="bg-white/5 py-1 px-3 rounded-full border border-white/10">{selectedMovie.duration || "120m"}</span>
                     <span className="bg-white/5 py-1 px-3 rounded-full border border-white/10">{selectedMovie.genre}</span>
                   </div>
-                  {(selectedMovie.imdb_id || (selectedMovie as any).imdbId) && (
-                    <a
-                      href={`https://www.imdb.com/title/${selectedMovie.imdb_id || (selectedMovie as any).imdbId}/`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="bg-[#F5C518] hover:bg-[#e2b616] text-black text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-md transition-colors shadow-sm inline-flex items-center gap-1 shrink-0 ml-auto"
-                    >
-                      Open in IMDb
-                    </a>
-                  )}
+                  <div className="flex items-center gap-2 shrink-0 ml-auto">
+                    {currentTrailerKey && (
+                      <button
+                        onClick={() => setActiveTrailerKey(currentTrailerKey)}
+                        className="bg-red-600 hover:bg-red-700 text-white text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-md transition-colors shadow-sm inline-flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        Watch Trailer
+                      </button>
+                    )}
+                    {(selectedMovie.imdb_id || (selectedMovie as any).imdbId) ? (
+                      <a
+                        href={`https://www.imdb.com/title/${selectedMovie.imdb_id || (selectedMovie as any).imdbId}/`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-[#F5C518] hover:bg-[#e2b616] text-black text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-md transition-colors shadow-sm inline-flex items-center gap-1 shrink-0"
+                      >
+                        Open in IMDb
+                      </a>
+                    ) : (
+                      <a
+                        href={`https://www.themoviedb.org/movie/${selectedMovie.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ backgroundColor: 'rgb(3, 37, 65)' }}
+                        className="hover:opacity-90 text-white text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-md transition-colors shadow-sm inline-flex items-center gap-1 shrink-0"
+                      >
+                        Open in TMDb
+                      </a>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-4">
                   <h3 className="text-xs font-bold tracking-widest text-white/50 uppercase">Synopsis</h3>
@@ -335,6 +380,54 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* In-App Trailer Video Modal */}
+      <AnimatePresence>
+        {activeTrailerKey && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] flex items-center justify-center p-4 sm:p-6 bg-black/90 backdrop-blur-md"
+            onClick={() => setActiveTrailerKey(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.92, opacity: 0, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="relative w-full max-w-3xl bg-[#141414] border border-white/10 rounded-md overflow-hidden shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#181818]">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse" />
+                  <span className="text-xs sm:text-sm font-bold text-white truncate max-w-xs sm:max-w-md">
+                    {selectedMovie?.title ? `${selectedMovie.title} - Official Trailer` : "Movie Trailer"}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setActiveTrailerKey(null)}
+                  className="p-1 rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  aria-label="Close trailer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="relative aspect-video w-full bg-black">
+                <iframe
+                  src={`https://www.youtube.com/embed/${activeTrailerKey}?autoplay=1&rel=0`}
+                  title={`${selectedMovie?.title || 'Movie'} Trailer`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="w-full h-full border-0 rounded-b-md"
+                />
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
@@ -553,7 +646,7 @@ function Card({
           <div className="flex justify-between items-end mb-2">
             <h2 className="text-xl md:text-2xl font-display font-bold text-white leading-tight drop-shadow-lg pr-4">{movie.title}</h2>
             <div className="flex items-center gap-1 bg-black/40 px-2 py-1 rounded-lg shrink-0">
-              <Star className="w-4 h-4 fill-[#c9c6c5] text-[#c9c6c5]" />
+              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
               <span className="text-xs font-bold">{movie.rating}</span>
             </div>
           </div>
@@ -617,7 +710,7 @@ function MovieReviews({ movieId }: { movieId: string }) {
       <h3 className="text-xs font-bold tracking-widest text-white/50 uppercase">User Reviews</h3>
       <div className="space-y-4">
         {reviews.map((r, i) => (
-          <div key={i} className="bg-white/5 p-4 rounded-xl border border-white/5">
+          <div key={i} className="bg-white/5 p-4 rounded-md border border-white/5">
             <div className="text-xs font-bold text-white mb-1.5">{r.author}</div>
             <p className="text-sm text-white/70 italic">"{r.content}"</p>
           </div>

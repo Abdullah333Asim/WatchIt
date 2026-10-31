@@ -20,7 +20,8 @@ export const movies = pgTable('movies', {
   synopsis: text('synopsis'),
   posterUrl: text('poster_url'),
   rating: real('rating'),
-  imdbId: text('imdb_id')
+  imdbId: text('imdb_id'),
+  trailerKey: text('trailer_key')
 });
 
 export const swipes = pgTable('swipes', {

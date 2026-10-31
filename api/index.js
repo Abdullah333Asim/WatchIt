@@ -70,7 +70,8 @@ var movies = (0, import_pg_core.pgTable)("movies", {
   synopsis: (0, import_pg_core.text)("synopsis"),
   posterUrl: (0, import_pg_core.text)("poster_url"),
   rating: (0, import_pg_core.real)("rating"),
-  imdbId: (0, import_pg_core.text)("imdb_id")
+  imdbId: (0, import_pg_core.text)("imdb_id"),
+  trailerKey: (0, import_pg_core.text)("trailer_key")
 });
 var swipes = (0, import_pg_core.pgTable)("swipes", {
   userId: (0, import_pg_core.text)("user_id").notNull().references(() => users.id),
@@ -402,8 +403,8 @@ async function loadPopularMovies(page = 1) {
       await Promise.all(
         data.results.map(async (m) => {
           if (!m.poster_path) return;
-          const existing = (await db.execute(import_drizzle_orm2.sql`SELECT id, imdb_id FROM movies WHERE id = ${m.id.toString()}`)).rows?.[0];
-          if (existing && existing.imdb_id) return;
+          const existing = (await db.execute(import_drizzle_orm2.sql`SELECT id, imdb_id, trailer_key FROM movies WHERE id = ${m.id.toString()}`)).rows?.[0];
+          if (existing && existing.imdb_id && existing.trailer_key) return;
           const year = m.release_date ? parseInt(m.release_date.split("-")[0]) : 0;
           const genres = (m.genre_ids || []).map((id) => GENRES[id]).filter(Boolean).join(", ");
           let duration = "120m";
@@ -473,8 +474,9 @@ async function searchMovieAndSave(title, yearStr) {
       const genres = (m.genre_ids || []).map((id) => GENRES[id]).filter(Boolean).join(", ");
       let duration = "120m";
       let imdbId = null;
+      let trailerKey = null;
       try {
-        const detailRes = await fetch(`${TMDB_BASE_URL}/movie/${m.id}?api_key=${TMDB_API_KEY}&language=en-US`);
+        const detailRes = await fetch(`${TMDB_BASE_URL}/movie/${m.id}?api_key=${TMDB_API_KEY}&language=en-US&append_to_response=videos`);
         if (detailRes.ok) {
           const detailData = await detailRes.json();
           if (detailData.runtime) {
@@ -482,6 +484,12 @@ async function searchMovieAndSave(title, yearStr) {
           }
           if (detailData.imdb_id) {
             imdbId = detailData.imdb_id;
+          }
+          if (detailData.videos && Array.isArray(detailData.videos.results)) {
+            const trailer = detailData.videos.results.find((v) => v.site === "YouTube" && v.type === "Trailer" && v.official) || detailData.videos.results.find((v) => v.site === "YouTube" && v.type === "Trailer") || detailData.videos.results.find((v) => v.site === "YouTube" && (v.type === "Teaser" || v.type === "Clip"));
+            if (trailer && trailer.key) {
+              trailerKey = trailer.key;
+            }
           }
         }
       } catch (e) {
@@ -497,7 +505,8 @@ async function searchMovieAndSave(title, yearStr) {
           synopsis: m.overview || "No synopsis available.",
           posterUrl: poster_url,
           rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0,
-          imdbId
+          imdbId,
+          trailerKey
         }).onConflictDoUpdate({
           target: movies.id,
           set: {
@@ -505,7 +514,8 @@ async function searchMovieAndSave(title, yearStr) {
             title: m.title,
             year,
             rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0,
-            imdbId: imdbId || import_drizzle_orm2.sql`movies.imdb_id`
+            imdbId: imdbId || import_drizzle_orm2.sql`movies.imdb_id`,
+            trailerKey: trailerKey || import_drizzle_orm2.sql`movies.trailer_key`
           }
         });
       } catch (e) {
@@ -516,11 +526,29 @@ async function searchMovieAndSave(title, yearStr) {
         year,
         poster_url,
         rating: m.vote_average ? parseFloat(m.vote_average.toFixed(1)) : 0,
-        imdb_id: imdbId
+        imdb_id: imdbId,
+        trailer_key: trailerKey
       };
     }
   } catch (e) {
     console.error("Failed to search movie", e);
+  }
+  return null;
+}
+async function fetchMovieTrailer(id) {
+  if (!TMDB_API_KEY) return null;
+  try {
+    const res = await fetch(`${TMDB_BASE_URL}/movie/${encodeURIComponent(id)}/videos?api_key=${TMDB_API_KEY}&language=en-US`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.results && Array.isArray(data.results)) {
+      const trailer = data.results.find((v) => v.site === "YouTube" && v.type === "Trailer" && v.official) || data.results.find((v) => v.site === "YouTube" && v.type === "Trailer") || data.results.find((v) => v.site === "YouTube" && (v.type === "Teaser" || v.type === "Clip"));
+      if (trailer && trailer.key) {
+        return trailer.key;
+      }
+    }
+  } catch (e) {
+    console.error("Failed to fetch trailer from TMDB", e);
   }
   return null;
 }
@@ -629,6 +657,27 @@ function createApp() {
       res.json([]);
     }
   });
+  app2.get("/api/movies/:id/trailer", requireAuth, async (req, res) => {
+    const { id } = req.params;
+    try {
+      const movieRow = (await db.execute(import_drizzle_orm3.sql`SELECT trailer_key FROM movies WHERE id = ${id}`)).rows?.[0];
+      if (movieRow && movieRow.trailer_key) {
+        return res.json({ trailer_key: movieRow.trailer_key });
+      }
+      const trailerKey = await fetchMovieTrailer(id);
+      if (trailerKey) {
+        try {
+          await db.update(movies).set({ trailerKey }).where((0, import_drizzle_orm3.eq)(movies.id, id));
+        } catch (_) {
+        }
+        return res.json({ trailer_key: trailerKey });
+      }
+      res.json({ trailer_key: null });
+    } catch (error) {
+      console.error("Get trailer error", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
   app2.get("/api/movies", requireAuth, async (req, res) => {
     const userId = req.user.uid;
     const page = parseInt(req.query.page) || 1;
@@ -728,11 +777,35 @@ function createApp() {
   app2.get("/api/profile", requireAuth, async (req, res) => {
     const userId = req.user.uid;
     try {
-      const user = (await db.select().from(users).where((0, import_drizzle_orm3.eq)(users.id, userId))).at(0);
+      const [userRows, historyResult] = await Promise.all([
+        db.select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          bio: users.bio,
+          avatarUrl: users.avatarUrl,
+          tasteDna: users.tasteDna
+        }).from(users).where((0, import_drizzle_orm3.eq)(users.id, userId)),
+        db.execute(import_drizzle_orm3.sql`
+          SELECT 
+            m.id, 
+            m.title, 
+            m.year, 
+            m.genre, 
+            m.poster_url, 
+            m.rating, 
+            m.imdb_id, 
+            s.action 
+          FROM swipes s 
+          JOIN movies m ON s.movie_id = m.id 
+          WHERE s.user_id = ${userId} 
+          ORDER BY s.timestamp DESC
+        `)
+      ]);
+      const user = userRows[0];
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
-      const historyResult = await db.execute(import_drizzle_orm3.sql`SELECT m.*, s.action FROM movies m JOIN swipes s ON m.id = s.movie_id WHERE s.user_id = ${userId} GROUP BY m.id, s.action ORDER BY MAX(s.timestamp) DESC`);
       const history = historyResult.rows || historyResult;
       res.json({
         ...user,
