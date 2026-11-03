@@ -690,7 +690,7 @@ function createApp() {
           WHERE user_id = ${userId} 
           AND (
             action IN ('Watched', 'Watchlist', 'Not Interested')
-            OR (action = 'Pass' AND timestamp > NOW() - INTERVAL '7 days')
+            OR (action IN ('Pass', 'Not Watched') AND timestamp > NOW() - INTERVAL '7 days')
           )
         ) 
         ORDER BY RANDOM() 
@@ -707,7 +707,7 @@ function createApp() {
               WHERE user_id = ${userId} 
               AND (
                 action IN ('Watched', 'Watchlist', 'Not Interested')
-                OR (action = 'Pass' AND timestamp > NOW() - INTERVAL '7 days')
+                OR (action IN ('Pass', 'Not Watched') AND timestamp > NOW() - INTERVAL '7 days')
               )
             ) 
             ORDER BY RANDOM() 
@@ -737,7 +737,8 @@ function createApp() {
     }
   });
   app2.post("/api/swipe", requireAuth, async (req, res) => {
-    const { movieId, action } = req.body;
+    let { movieId, action } = req.body;
+    if (action === "Not Watched") action = "Pass";
     const userId = req.user.uid;
     if (!movieId || !action) {
       return res.status(400).json({ error: "movieId and action are required" });
@@ -764,7 +765,8 @@ function createApp() {
   });
   app2.put("/api/swipe/:movieId", requireAuth, async (req, res) => {
     const { movieId } = req.params;
-    const { action } = req.body;
+    let { action } = req.body;
+    if (action === "Not Watched") action = "Pass";
     const userId = req.user.uid;
     try {
       await db.update(swipes).set({ action, timestamp: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm3.and)((0, import_drizzle_orm3.eq)(swipes.userId, userId), (0, import_drizzle_orm3.eq)(swipes.movieId, movieId)));
@@ -777,6 +779,9 @@ function createApp() {
   app2.get("/api/profile", requireAuth, async (req, res) => {
     const userId = req.user.uid;
     try {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
       const [userRows, historyResult] = await Promise.all([
         db.select({
           id: users.id,

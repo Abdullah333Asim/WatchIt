@@ -3,6 +3,7 @@ import { motion, useMotionValue, useTransform, useAnimation, AnimatePresence } f
 import { Star, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, X, RotateCcw, Play } from "lucide-react";
 import { extractDominantColor } from "../lib/color";
 import { fetchWithUser } from "../lib/api";
+import { recordSwipeInCache } from "../lib/profileCache";
 
 interface Movie {
   id: string;
@@ -167,6 +168,8 @@ export default function SwipeView({ onColorExtracted }: { onColorExtracted: (col
   const handleSwipe = async (action: 'Watched' | 'Pass' | 'Watchlist' | 'Not Interested') => {
     const currentMovie = movies[currentIndex];
     if (!currentMovie) return;
+
+    recordSwipeInCache(currentMovie, action);
 
     fetchWithUser('/api/swipe', {
       method: 'POST',

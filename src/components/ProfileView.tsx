@@ -3,12 +3,11 @@ import { motion, AnimatePresence } from "motion/react";
 import { User, Fingerprint, ChevronRight, Moon, Tv, Shield, Play, X } from "lucide-react";
 import { fetchWithUser } from "../lib/api";
 import { logout } from "../lib/firebase.ts";
-
-let cachedProfile: any = null;
+import { getCachedProfile, subscribeToProfile, fetchProfile, matchesListType, isPassAction, removeMovieFromCache, updateMovieActionInCache } from "../lib/profileCache";
 
 export default function ProfileView({ onViewList }: { onViewList: (type: 'Watched' | 'Watchlist' | 'Pass') => void }) {
-  const [profile, setProfile] = useState<any>(cachedProfile);
-  const [loading, setLoading] = useState(!cachedProfile);
+  const [profile, setProfile] = useState<any>(() => getCachedProfile());
+  const [loading, setLoading] = useState(() => !getCachedProfile());
   const [isEditing, setIsEditing] = useState(() => {
     return !!window.history.state?.profileEditing;
   });
@@ -37,9 +36,9 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
     }
   }, [selectedMovie]);
   
-  const [editName, setEditName] = useState(() => cachedProfile?.name || "");
-  const [editBio, setEditBio] = useState(() => cachedProfile?.bio || "");
-  const [editAvatar, setEditAvatar] = useState(() => cachedProfile?.avatar_url || "");
+  const [editName, setEditName] = useState(() => getCachedProfile()?.name || "");
+  const [editBio, setEditBio] = useState(() => getCachedProfile()?.bio || "");
+  const [editAvatar, setEditAvatar] = useState(() => getCachedProfile()?.avatar_url || "");
   const [isSaving, setIsSaving] = useState(false);
 
   const isEditingRef = useRef(isEditing);
@@ -75,19 +74,15 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    Promise.all([
-      fetchWithUser('/api/profile')
-    ])
-      .then(async ([res]) => {
-        if (!res.ok) {
-          localStorage.removeItem('guest_token');
-          logout().then(() => window.location.reload());
-          throw new Error("Failed to fetch profile");
-        }
-        return res.json();
-      })
+    const unsub = subscribeToProfile((updated) => {
+      if (updated) {
+        setProfile(updated);
+        setLoading(false);
+      }
+    });
+
+    fetchProfile(true)
       .then(data => {
-        cachedProfile = data;
         setProfile(data);
         if (!isEditingRef.current) {
           setEditName(data.name || "");
@@ -100,6 +95,8 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
         console.error(err);
         setLoading(false);
       });
+
+    return unsub;
   }, []);
 
   // Listen to popstate to trap back button for Edit Profile mode and movie modal
@@ -199,15 +196,13 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
 
   const handleRemove = async (movieId: string) => {
     try {
-      const res = await fetchWithUser(`/api/swipe/${movieId}`, { method: 'DELETE' });
-      if (res.ok) {
-        cachedProfile = { ...cachedProfile, history: cachedProfile?.history?.filter((h: any) => h.movie_id !== movieId && h.id !== movieId) };
-        setProfile((prev: any) => ({
-          ...prev,
-          history: prev.history.filter((h: any) => h.movie_id !== movieId && h.id !== movieId)
-        }));
-        handleCloseMovie();
-      }
+      removeMovieFromCache(movieId);
+      setProfile((prev: any) => prev ? ({
+        ...prev,
+        history: prev.history.filter((h: any) => h.movie_id !== movieId && h.id !== movieId)
+      }) : prev);
+      handleCloseMovie();
+      await fetchWithUser(`/api/swipe/${movieId}`, { method: 'DELETE' });
     } catch (e) {
       console.error(e);
     }
@@ -215,18 +210,17 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
 
   const handleMoveToWatched = async (movieId: string) => {
     try {
-      const res = await fetchWithUser(`/api/swipe/${movieId}`, {
+      updateMovieActionInCache(movieId, 'Watched');
+      setProfile((prev: any) => prev ? ({
+        ...prev,
+        history: prev.history.map((h: any) => (h.movie_id === movieId || h.id === movieId) ? { ...h, action: 'Watched' } : h)
+      }) : prev);
+      handleCloseMovie();
+      await fetchWithUser(`/api/swipe/${movieId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'Watched' })
       });
-      if (res.ok) {
-        setProfile((prev: any) => ({
-          ...prev,
-          history: prev.history.map((h: any) => (h.movie_id === movieId || h.id === movieId) ? { ...h, action: 'Watched' } : h)
-        }));
-        handleCloseMovie();
-      }
     } catch (e) {
       console.error(e);
     }
@@ -234,25 +228,24 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
 
   const handleMoveToWatchlist = async (movieId: string) => {
     try {
-      const res = await fetchWithUser(`/api/swipe/${movieId}`, {
+      updateMovieActionInCache(movieId, 'Watchlist');
+      setProfile((prev: any) => prev ? ({
+        ...prev,
+        history: prev.history.map((h: any) => (h.movie_id === movieId || h.id === movieId) ? { ...h, action: 'Watchlist' } : h)
+      }) : prev);
+      handleCloseMovie();
+      await fetchWithUser(`/api/swipe/${movieId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'Watchlist' })
       });
-      if (res.ok) {
-        setProfile((prev: any) => ({
-          ...prev,
-          history: prev.history.map((h: any) => (h.movie_id === movieId || h.id === movieId) ? { ...h, action: 'Watchlist' } : h)
-        }));
-        handleCloseMovie();
-      }
     } catch (e) {
       console.error(e);
     }
   };
 
   const renderMovieList = (title: string, actionType: 'Watchlist' | 'Watched' | 'Pass') => {
-    const list = profile.history.filter((h: any) => h.action === actionType);
+    const list = profile?.history ? profile.history.filter((h: any) => matchesListType(h.action, actionType)) : [];
     if (actionType === 'Pass' && list.length === 0) return null;
     const showViewAllCard = list.length > cols;
     const displayList = list.slice(0, showViewAllCard ? cols - 1 : cols);
@@ -261,7 +254,7 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
     return (
       <section className="space-y-4">
         <div className="flex justify-between items-center">
-          <h2 className="text-xl md:text-2xl font-display font-bold text-[#c9c6c5]">{title}</h2>
+          <h2 className="text-xl md:text-2xl font-display font-bold text-[#c9c6c5] flex items-center gap-2"><span>{title}</span> <span className="text-sm font-normal text-white/40">({list.length})</span></h2>
           <button onClick={() => onViewList(actionType)} className="text-sm font-bold text-[#c9c6c5] hover:underline">View All</button>
         </div>
         <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-3 sm:gap-4">
@@ -451,7 +444,7 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
                     </button>
                   )}
 
-                  {selectedMovie.action === 'Pass' && (
+                  {isPassAction(selectedMovie.action) && (
                     <>
                       <button 
                         onClick={() => handleMoveToWatchlist(selectedMovie.id)}
@@ -503,7 +496,7 @@ export default function ProfileView({ onViewList }: { onViewList: (type: 'Watche
                     onClick={() => handleRemove(selectedMovie.id)}
                     className="w-full py-3 bg-red-500/10 text-red-500 text-sm font-bold rounded-xl hover:bg-red-500/20 transition-colors"
                   >
-                    {selectedMovie.action === 'Pass' ? 'Reset to Swipe Queue' : `Remove from ${selectedMovie.action}`}
+                    {isPassAction(selectedMovie.action) ? 'Reset to Swipe Queue' : `Remove from ${selectedMovie.action}`}
                   </button>
 
                   <button 

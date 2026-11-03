@@ -173,7 +173,7 @@ export function createApp() {
           WHERE user_id = ${userId} 
           AND (
             action IN ('Watched', 'Watchlist', 'Not Interested')
-            OR (action = 'Pass' AND timestamp > NOW() - INTERVAL '7 days')
+            OR (action IN ('Pass', 'Not Watched') AND timestamp > NOW() - INTERVAL '7 days')
           )
         ) 
         ORDER BY RANDOM() 
@@ -192,7 +192,7 @@ export function createApp() {
               WHERE user_id = ${userId} 
               AND (
                 action IN ('Watched', 'Watchlist', 'Not Interested')
-                OR (action = 'Pass' AND timestamp > NOW() - INTERVAL '7 days')
+                OR (action IN ('Pass', 'Not Watched') AND timestamp > NOW() - INTERVAL '7 days')
               )
             ) 
             ORDER BY RANDOM() 
@@ -227,7 +227,8 @@ export function createApp() {
   });
 
   app.post("/api/swipe", requireAuth, async (req, res) => {
-    const { movieId, action } = req.body;
+    let { movieId, action } = req.body;
+    if (action === 'Not Watched') action = 'Pass';
     const userId = (req as AuthRequest).user!.uid;
     
     if (!movieId || !action) {
@@ -258,7 +259,8 @@ export function createApp() {
 
   app.put("/api/swipe/:movieId", requireAuth, async (req, res) => {
     const { movieId } = req.params;
-    const { action } = req.body;
+    let { action } = req.body;
+    if (action === 'Not Watched') action = 'Pass';
     const userId = (req as AuthRequest).user!.uid;
     try {
       await db.update(swipes).set({ action, timestamp: new Date() }).where(and(eq(swipes.userId, userId), eq(swipes.movieId, movieId)));
@@ -272,6 +274,9 @@ export function createApp() {
   app.get("/api/profile", requireAuth, async (req, res) => {
     const userId = (req as AuthRequest).user!.uid;
     try {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       // Parallel execution: fetch user profile and swipe history concurrently
       // Optimized projection: only select lightweight fields needed for the grid, excluding heavy synopsis & trailer text
       const [userRows, historyResult] = await Promise.all([

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Filter, Star, ChevronDown, X, Search, RotateCcw, Play } from "lucide-react";
 import { fetchWithUser } from "../lib/api";
+import { getCachedProfile, fetchProfile, matchesListType, isPassAction, removeMovieFromCache, updateMovieActionInCache } from "../lib/profileCache";
 
 interface Movie {
   id: string;
@@ -88,10 +89,9 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    fetchWithUser('/api/profile')
-      .then(res => res.json())
+    fetchProfile(true)
       .then(data => {
-        setMovies(data.history.filter((m: any) => m.action === listType));
+        setMovies(data.history.filter((m: any) => matchesListType(m.action, listType)) as Movie[]);
         setLoading(false);
       })
       .catch(err => {
@@ -102,11 +102,10 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
 
   const handleRemove = async (movieId: string) => {
     try {
-      const res = await fetchWithUser(`/api/swipe/${movieId}`, { method: 'DELETE' });
-      if (res.ok) {
-        setMovies(prev => prev.filter(m => m.id !== movieId));
-        handleCloseMovie();
-      }
+      removeMovieFromCache(movieId);
+      setMovies(prev => prev.filter(m => m.id !== movieId));
+      handleCloseMovie();
+      await fetchWithUser(`/api/swipe/${movieId}`, { method: 'DELETE' });
     } catch (e) {
       console.error(e);
     }
@@ -114,19 +113,18 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
 
   const handleMoveToWatched = async (movieId: string) => {
     try {
-      const res = await fetchWithUser(`/api/swipe/${movieId}`, {
+      updateMovieActionInCache(movieId, 'Watched');
+      if (listType === 'Watchlist' || listType === 'Pass') {
+        setMovies(prev => prev.filter(m => m.id !== movieId));
+      } else {
+        setMovies(prev => prev.map(m => m.id === movieId ? { ...m, action: 'Watched' } : m));
+      }
+      handleCloseMovie();
+      await fetchWithUser(`/api/swipe/${movieId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'Watched' })
       });
-      if (res.ok) {
-        if (listType === 'Watchlist' || listType === 'Pass') {
-          setMovies(prev => prev.filter(m => m.id !== movieId));
-        } else {
-          setMovies(prev => prev.map(m => m.id === movieId ? { ...m, action: 'Watched' } : m));
-        }
-        handleCloseMovie();
-      }
     } catch (e) {
       console.error(e);
     }
@@ -134,17 +132,16 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
 
   const handleMoveToWatchlist = async (movieId: string) => {
     try {
-      const res = await fetchWithUser(`/api/swipe/${movieId}`, {
+      updateMovieActionInCache(movieId, 'Watchlist');
+      if (listType === 'Pass') {
+        setMovies(prev => prev.filter(m => m.id !== movieId));
+      }
+      handleCloseMovie();
+      await fetchWithUser(`/api/swipe/${movieId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'Watchlist' })
       });
-      if (res.ok) {
-        if (listType === 'Pass') {
-          setMovies(prev => prev.filter(m => m.id !== movieId));
-        }
-        handleCloseMovie();
-      }
     } catch (e) {
       console.error(e);
     }
@@ -727,7 +724,7 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
                     </button>
                   )}
 
-                  {listType === 'Pass' && (
+                  {(listType === 'Pass' || isPassAction(selectedMovie.action)) && (
                     <>
                       <button 
                         onClick={() => handleMoveToWatchlist(selectedMovie.id)}
@@ -779,7 +776,7 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
                     onClick={() => handleRemove(selectedMovie.id)}
                     className="w-full py-2 bg-red-500/10 text-red-500 text-xs font-semibold rounded-md hover:bg-red-500/20 transition-colors cursor-pointer"
                   >
-                    {listType === 'Pass' ? 'Reset to Swipe Queue' : `Remove from ${listType}`}
+                    {(listType === 'Pass' || isPassAction(selectedMovie.action)) ? 'Reset to Swipe Queue' : `Remove from ${listType}`}
                   </button>
 
                   <button 
