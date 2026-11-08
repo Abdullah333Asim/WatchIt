@@ -1,5 +1,53 @@
-
 services:
+  # --- THE TRAFFIC COP ---
+  envoy:
+    image: envoyproxy/envoy:v1.27-latest
+    container_name: envoy
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+      - "9901:9901"
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml
+      - ./logs:/var/log/envoy
+    extra_hosts:                   # <--- ADD THIS
+      - "host.docker.internal:host-gateway"  # <--- ADD THIS
+    depends_on:
+      - replica-a
+      - replica-b
+      - replica-c
+
+  # --- OUR 3 REPLICAS ---
+  replica-a:
+    build: .
+    container_name: replica-a
+    ports:
+      - "50051:50051" 
+    environment:
+      - REPLICA_ID=A
+    env_file: .env
+    volumes:
+      - ./logs:/app/logs
+
+  replica-b:
+    build: .
+    container_name: replica-b
+    environment:
+      - REPLICA_ID=B
+    env_file: .env
+    volumes:
+      - ./logs:/app/logs
+
+  replica-c:
+    build: .
+    container_name: replica-c
+    environment:
+      - REPLICA_ID=C
+    env_file: .env
+    volumes:
+      - ./logs:/app/logs
+
+  # --- OBSERVABILITY STACK (Unchanged) ---
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus

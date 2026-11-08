@@ -1,6 +1,13 @@
 import client from 'prom-client';
 import promClient from 'prom-client';
 
+const replicaId = process.env.REPLICA_ID || 'local-dev';
+
+// Automatically add replica_id to every metric Prometheus scrapes
+client.register.setDefaultLabels({
+  replica_id: replicaId
+});
+
 client.collectDefaultMetrics();
 
 export const swipeCounter = new client.Counter({

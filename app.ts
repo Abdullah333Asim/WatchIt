@@ -327,7 +327,7 @@ export function createApp() {
       });
       return sendProblem(req, res, 503, 'Service Unavailable', 'Simulated transient upstream failure.', 'transient-failure');
     }
-
+    // if (process.env.REPLICA_ID === 'B') await new Promise(r => setTimeout(r, 500));
     const { movieId, action } = req.body || {};
     const userId = (req as AuthRequest).user!.uid;
 

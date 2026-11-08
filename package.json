@@ -7,6 +7,7 @@
   },
   "scripts": {
     "dev": "tsx app.ts",
+    "start:services": "node start.js",
     "build": "vite build && esbuild app.ts --bundle --platform=node --target=node20 --format=cjs --outfile=api/index.js --packages=external",
     "build:server": "esbuild app.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",

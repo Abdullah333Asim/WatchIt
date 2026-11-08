@@ -39,7 +39,7 @@ def main():
     print("WATCHIT gRPC TRAFFIC GENERATOR (PART C)")
     print("=" * 60)
 
-    with grpc.insecure_channel('localhost:50051') as channel:
+    with grpc.insecure_channel('127.0.0.1:50051') as channel:
         stub = swipes_pb2_grpc.SwipeServiceStub(channel)
         
         # Loop 20 times to generate dense metrics for Grafana

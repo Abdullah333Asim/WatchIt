@@ -2,17 +2,31 @@ global:
   scrape_interval: 5s
 
 scrape_configs:
+  # Keeps your existing host metrics
   - job_name: 'node-exporter'
     static_configs:
       - targets: ['node-exporter:9100']
         labels:
           machine: 'Host-Machine'
 
-  - job_name: 'watchit-backend'
+  # Scrapes Envoy proxy metrics directly
+  - job_name: 'envoy-proxy'
+    metrics_path: '/stats/prometheus'
     static_configs:
-      # 'host.docker.internal' allows the Docker container to see your local computer's port 3000
-      - targets: ['host.docker.internal:3000']
+      - targets: ['envoy:9901']
 
-  - job_name: 'watchit-grpc-server'
+  # Scrapes the HTTP metrics for all 3 replicas inside Docker
+  - job_name: 'watchit-replicas-http'
     static_configs:
-      - targets: ['host.docker.internal:9091']
+      - targets: 
+        - 'replica-a:3000'
+        - 'replica-b:3000'
+        - 'replica-c:3000'
+
+  # Scrapes the gRPC metrics for all 3 replicas inside Docker
+  - job_name: 'watchit-replicas-grpc'
+    static_configs:
+      - targets: 
+        - 'replica-a:9091'
+        - 'replica-b:9091'
+        - 'replica-c:9091'
