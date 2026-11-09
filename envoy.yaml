@@ -79,6 +79,7 @@ static_resources:
       connect_timeout: 1s
       type: STRICT_DNS
       lb_policy: ROUND_ROBIN  #LEAST_REQUEST
+      # HEALTH CHECKS
       health_checks:
         - timeout: 1s
           interval: 3s
@@ -92,18 +93,19 @@ static_resources:
           - lb_endpoints:
               - endpoint:
                   address: { socket_address: { address: replica-a, port_value: 3000 } }
-  #               load_balancing_weight: 2
+                  #load_balancing_weight: 2
               - endpoint:
-                  address: { socket_address: { address: replica-b, port_value: 3000 } }
-  #               load_balancing_weight: 1
+                  address: { socket_address: { address: replica-b, port_value: 3000 } }  # COMMENT OUT THIS ENDPOINT IF YOU WANT TO TEST REPLICA A ONLY
+                  #load_balancing_weight: 1
               - endpoint:
-                  address: { socket_address: { address: replica-c, port_value: 3000 } }
-  #               load_balancing_weight: 1
+                  address: { socket_address: { address: replica-c, port_value: 3000 } }  # COMMENT OUT THIS ENDPOINT IF YOU WANT TO TEST REPLICA A ONLY
+                  #load_balancing_weight: 1
 
     - name: watchit_grpc_cluster
       connect_timeout: 1s
       type: STRICT_DNS
       lb_policy: ROUND_ROBIN  #LEAST_REQUEST
+      # HEALTH CHECKS
       health_checks:
         - timeout: 1s
           interval: 3s
@@ -122,10 +124,10 @@ static_resources:
           - lb_endpoints:
               - endpoint:
                   address: { socket_address: { address: replica-a, port_value: 50051 } }
-  #               load_balancing_weight: 2
+                  #load_balancing_weight: 2
               - endpoint:
-                  address: { socket_address: { address: replica-b, port_value: 50051 } }
-  #               load_balancing_weight: 1
+                  address: { socket_address: { address: replica-b, port_value: 50051 } }  # COMMENT OUT THIS ENDPOINT IF YOU WANT TO TEST REPLICA A ONLY
+                  #load_balancing_weight: 1
               - endpoint:
-                  address: { socket_address: { address: replica-c, port_value: 50051 } }
-  #               load_balancing_weight: 1
+                  address: { socket_address: { address: replica-c, port_value: 50051 } }  # COMMENT OUT THIS ENDPOINT IF YOU WANT TO TEST REPLICA A ONLY
+                  #load_balancing_weight: 1

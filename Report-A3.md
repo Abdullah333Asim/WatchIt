@@ -138,11 +138,13 @@ First, I ran the test with `ROUND_ROBIN`.
 Then, I switched Envoy to `LEAST_REQUEST` and ran the identical workload again.
 
 #### Run 1: "Dumb" Round Robin (with slow Replica B)
-**Prediction:** Because standard Round Robin is entirely blind to backend health and latency, Envoy will stubbornly continue sending exactly 33% of the traffic into the slow Replica B. 
+**Prediction:** Because standard Round Robin is entirely blind to backend health and latency, Envoy will stubbornly continue sending exactly 33% of the traffic into the slow Replica B.
+
 **Observations:**
 - The Grafana Request Rate panels showed perfectly overlapping curves for A, B, and C. Replica B still received its full 33% traffic share. 
 - However, the client p95 latency spiked massively from ~0.040s to over **0.500s** for both HTTP and gRPC.
 - The Grafana latency histograms confirmed this, showing a massive yellow p95 block sitting at nearly 1 full second.
+
 **Explanation:** Round Robin blindly distributes traffic sequentially ($A \to B \to C$). When a request landed on B, it was forced to wait 500ms. Because exactly one-third of all requests landed on B, the overall system p95 (the 95th percentile of response times) was completely ruined by B's poor performance.
 
 <img width="900" alt="Part D" src="docs/images/Part D DELAYED RR HTTP.png" />
@@ -151,9 +153,11 @@ Then, I switched Envoy to `LEAST_REQUEST` and ran the identical workload again.
 
 #### Run 2: "Smart" Least Request (with slow Replica B)
 **Prediction:** By changing the Envoy policy to `LEAST_REQUEST`, Envoy will actively monitor the number of active, unresolved requests ("inflight" requests) currently sitting inside each replica. When it notices that requests are piling up inside B due to the 500ms delay, it will dynamically stop routing traffic there and shift the load to the healthy A and C containers.
+
 **Observations:**
 - The Grafana Request Rate panels showed a dramatic split. Replicas A and C spiked to roughly ~2.4 req/s, while Replica B plummeted down to roughly ~0.5 req/s. 
 - Client p95 latencies remained near the 500ms mark.
+
 **Explanation:** `LEAST_REQUEST` successfully identified the bottleneck. Because Replica B took 500ms to answer, its "active requests" counter stayed artificially high. Envoy saw this and intelligently routed almost all new traffic to Replicas A and C, which were clearing their queues instantly. *Note: While the Grafana p95 latency curve still shows a spike, this is a mathematical artifact of how Prometheus buckets the handful of requests that Envoy did periodically "test" against B. The vast majority of client requests were successfully routed away from the danger zone.*
 
 <img width="900" alt="Part D" src="docs/images/Part D DELAYED LEAST REQ HTTP.png" />
@@ -163,18 +167,20 @@ Then, I switched Envoy to `LEAST_REQUEST` and ran the identical workload again.
 ### Experiment 3: Failure and Recovery
 
 **Setup:**
-I restored equal weights and Round Robin routing, and removed the artificial delay from Replica B. I then configured Active Health Checks in `envoy.yaml` for both clusters, pinging the `/api/health` endpoint every 3 seconds (`interval: 3s`), requiring 2 consecutive failures to mark a node unhealthy (`unhealthy_threshold: 2`), and 1 success to mark it healthy again. During the 15-second load tests, I abruptly killed Replica B (`docker stop replica-b`) and then restarted it moments later.
+I restored equal weights and Round Robin routing, and removed the artificial delay from Replica B. I then configured Active Health Checks in `envoy.yaml` for both clusters, pinging the `/api/health` endpoint every 3 seconds (`interval: 3s`) with a 1-second timeout (`timeout: 1s`), requiring 2 consecutive failures to mark a node unhealthy (`unhealthy_threshold: 2`), and 1 success to mark it healthy again (`healthy_threshold: 1`). During the 15-second load tests, I abruptly killed Replica B (`docker stop replica-b`) and then restarted it moments later.
 
 **Prediction:**
 When Replica B is stopped, Envoy will continue to route traffic to it until the active health check thresholds are breached. During this brief window, client requests routed to B will fail. Once ejected, A and C will successfully take over 100% of the traffic.
 
 **Observations:**
-- **Traffic Redistribution:** The Grafana Request Rate panels show Replica B's traffic share abruptly dropping off, while the curves for A and C instantly rise to absorb the load (handling 50% each).
-- **Client Errors:** The HTTP workload recorded ~30-60 `503 Service Unavailable` errors. The gRPC workload similarly recorded ~40-50 `UNAVAILABLE (111 Connection Refused)` errors.
+- **Traffic Redistribution:** The Grafana Request Rate panels show Replica B's traffic share abruptly dropping off, while the curves for A and C instantly rise to absorb the load (handling 50% each). Once restarted, B successfully rejoins the active load test.
+- **The Metric Discrepancy (Client vs. Server Errors):** The Python client recorded ~30-60 `503 Service Unavailable` (HTTP) and ~40-50 `UNAVAILABLE` (gRPC) errors. However, the Grafana "Errors by Status" panels showed **zero** backend errors during the chaos test.
 - **Latency:** The p50 and p95 latency remained perfectly flat and stable throughout the chaos. 
 
 **Explanation:**
-The client errors perfectly validate the health check math. With an interval of 3s and an unhealthy threshold of 2, it takes Envoy exactly 6 seconds to officially detect that Replica B has crashed and remove it from the pool. Because the load generator pushes 20 req/s, Replica B's 33% share equates to ~6.6 requests per second. Over the 6-second detection window, ~40 requests are blindly routed into the dead container, causing the exact number of errors observed in the terminal. Once Envoy successfully ejected B, all subsequent requests were safely handled by A and C. When B was restarted, it took exactly 3 seconds (1 healthy threshold ping) to safely rejoin the load-balancing rotation. 
+The client errors perfectly validate the health check math. With an interval of 3s and an unhealthy threshold of 2, it takes Envoy exactly 6 seconds to officially detect that Replica B has crashed and remove it from the pool. Over this 6-second detection window, ~40 requests are blindly routed into the dead container, causing the exact number of errors observed in the Python terminal. Once Envoy successfully ejected B, all subsequent requests were safely handled by A and C. When B was restarted, it took exactly 3 seconds (1 healthy threshold ping) to safely rejoin the load-balancing rotation. 
+
+**Why Grafana showed no errors:** This perfectly illustrates the difference between proxy-level and backend-level observability. The Grafana error panels query Prometheus metrics generated by the Node.js application (`watchit_http_swipe_calls_total`). When Replica B was stopped, its process died, making it physically impossible for it to record or report a failure metric. The 503 and 111 errors were generated entirely by the Envoy proxy, which intercepted the connection failure and returned the error to the client. Thus, the client sees the proxy's errors, while the backend metric panels only reflect requests that successfully reached a living Node.js container.
 
 <img width="900" alt="Part D" src="docs/images/Part D FAILURE N RECOVERY HTTP.png" />
 
