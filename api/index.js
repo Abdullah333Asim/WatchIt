@@ -552,6 +552,53 @@ async function fetchMovieTrailer(id) {
   }
   return null;
 }
+var creditsCache = /* @__PURE__ */ new Map();
+async function fetchMovieCredits(id) {
+  if (creditsCache.has(id)) {
+    return creditsCache.get(id);
+  }
+  let dbDuration;
+  let dbSynopsis;
+  try {
+    const movieRow = (await db.execute(import_drizzle_orm2.sql`SELECT duration, synopsis FROM movies WHERE id = ${id}`)).rows?.[0];
+    if (movieRow) {
+      if (movieRow.duration) dbDuration = movieRow.duration;
+      if (movieRow.synopsis && movieRow.synopsis !== "No synopsis available.") dbSynopsis = movieRow.synopsis;
+    }
+  } catch (_) {
+  }
+  if (!TMDB_API_KEY) {
+    return { cast: [], duration: dbDuration, synopsis: dbSynopsis };
+  }
+  try {
+    const res = await fetch(`${TMDB_BASE_URL}/movie/${encodeURIComponent(id)}?api_key=${TMDB_API_KEY}&language=en-US&append_to_response=credits`);
+    if (!res.ok) {
+      return { cast: [], duration: dbDuration, synopsis: dbSynopsis };
+    }
+    const data = await res.json();
+    const cast = (data.credits?.cast || []).slice(0, 5).map((c) => c.name).filter(Boolean);
+    const duration = data.runtime ? `${data.runtime}m` : dbDuration;
+    const synopsis = data.overview || dbSynopsis;
+    const result = { cast, duration, synopsis };
+    creditsCache.set(id, result);
+    if (duration || synopsis) {
+      try {
+        await db.execute(import_drizzle_orm2.sql`
+          UPDATE movies 
+          SET 
+            duration = COALESCE(NULLIF(duration, ''), ${duration || null}),
+            synopsis = CASE WHEN synopsis = 'No synopsis available.' OR synopsis IS NULL THEN ${synopsis || "No synopsis available."} ELSE synopsis END
+          WHERE id = ${id}
+        `);
+      } catch (_) {
+      }
+    }
+    return result;
+  } catch (e) {
+    console.error("Failed to fetch credits from TMDB", e);
+    return { cast: [], duration: dbDuration, synopsis: dbSynopsis };
+  }
+}
 
 // app.ts
 var import_bcryptjs = __toESM(require("bcryptjs"));
@@ -678,6 +725,29 @@ function createApp() {
       res.status(500).json({ error: "Internal server error" });
     }
   });
+  app2.get("/api/movies/:id/credits", requireAuth, async (req, res) => {
+    const { id } = req.params;
+    try {
+      const data = await fetchMovieCredits(id);
+      res.json(data);
+    } catch (error) {
+      console.error("Get credits error", error);
+      res.json({ cast: [] });
+    }
+  });
+  app2.get("/api/movies/:id", requireAuth, async (req, res) => {
+    const { id } = req.params;
+    try {
+      const movieRow = (await db.execute(import_drizzle_orm3.sql`SELECT * FROM movies WHERE id = ${id}`)).rows?.[0];
+      if (movieRow) {
+        return res.json(movieRow);
+      }
+      res.status(404).json({ error: "Movie not found" });
+    } catch (error) {
+      console.error("Get movie error", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
   app2.get("/api/movies", requireAuth, async (req, res) => {
     const userId = req.user.uid;
     const page = parseInt(req.query.page) || 1;
@@ -744,12 +814,26 @@ function createApp() {
       return res.status(400).json({ error: "movieId and action are required" });
     }
     try {
-      await db.delete(swipes).where((0, import_drizzle_orm3.and)((0, import_drizzle_orm3.eq)(swipes.userId, userId), (0, import_drizzle_orm3.eq)(swipes.movieId, movieId)));
-      await db.insert(swipes).values({ userId, movieId, action });
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Post swipe error", error);
-      res.status(500).json({ error: "Internal server error" });
+      await db.insert(swipes).values({ userId, movieId, action, timestamp: /* @__PURE__ */ new Date() }).onConflictDoUpdate({
+        target: [swipes.userId, swipes.movieId],
+        set: { action, timestamp: /* @__PURE__ */ new Date() }
+      });
+      return res.json({ success: true });
+    } catch (insertError) {
+      console.error("Swipe Save Failed (Insert/Upsert):", insertError);
+      try {
+        await db.update(swipes).set({ action, timestamp: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm3.and)((0, import_drizzle_orm3.eq)(swipes.userId, userId), (0, import_drizzle_orm3.eq)(swipes.movieId, movieId)));
+        await db.execute(import_drizzle_orm3.sql`
+          INSERT INTO swipes (user_id, movie_id, action, timestamp)
+          VALUES (${userId}, ${movieId}, ${action}, NOW())
+          ON CONFLICT (user_id, movie_id) DO UPDATE
+          SET action = ${action}, timestamp = NOW()
+        `);
+        return res.json({ success: true });
+      } catch (fallbackError) {
+        console.error("Swipe Save Failed:", fallbackError);
+        return res.status(500).json({ error: "Internal server error" });
+      }
     }
   });
   app2.delete("/api/swipe/:movieId", requireAuth, async (req, res) => {
@@ -782,7 +866,7 @@ function createApp() {
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
       res.setHeader("Pragma", "no-cache");
       res.setHeader("Expires", "0");
-      const [userRows, historyResult] = await Promise.all([
+      const [userRows, countsResult, historyResult] = await Promise.all([
         db.select({
           id: users.id,
           name: users.name,
@@ -793,13 +877,24 @@ function createApp() {
         }).from(users).where((0, import_drizzle_orm3.eq)(users.id, userId)),
         db.execute(import_drizzle_orm3.sql`
           SELECT 
+            COUNT(*) FILTER (WHERE action = 'Watched')::int AS watched,
+            COUNT(*) FILTER (WHERE action IN ('Pass', 'Not Watched'))::int AS pass,
+            COUNT(*) FILTER (WHERE action = 'Watchlist')::int AS watchlist
+          FROM swipes
+          WHERE user_id = ${userId}
+        `),
+        db.execute(import_drizzle_orm3.sql`
+          SELECT 
             m.id, 
             m.title, 
             m.year, 
             m.genre, 
+            m.duration,
+            m.synopsis, 
             m.poster_url, 
             m.rating, 
             m.imdb_id, 
+            m.trailer_key, 
             s.action 
           FROM swipes s 
           JOIN movies m ON s.movie_id = m.id 
@@ -811,11 +906,18 @@ function createApp() {
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
+      const countsRow = (countsResult.rows || countsResult)[0] || {};
+      const counts = {
+        watched: Number(countsRow.watched || 0),
+        pass: Number(countsRow.pass || 0),
+        watchlist: Number(countsRow.watchlist || 0)
+      };
       const history = historyResult.rows || historyResult;
       res.json({
         ...user,
         avatar_url: user.avatarUrl,
         taste_dna: user.tasteDna ? JSON.parse(user.tasteDna) : {},
+        counts,
         history
       });
     } catch (error) {

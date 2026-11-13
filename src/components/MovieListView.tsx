@@ -2,7 +2,12 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Filter, Star, ChevronDown, X, Search, RotateCcw, Play } from "lucide-react";
 import { fetchWithUser } from "../lib/api";
-import { getCachedProfile, fetchProfile, matchesListType, isPassAction, removeMovieFromCache, updateMovieActionInCache } from "../lib/profileCache";
+import StarRating from "./StarRating";
+const isPassAction = (action: string | undefined | null) => action === 'Pass' || action === 'Not Watched';
+const matchesListType = (action: string | undefined | null, type: 'Watched' | 'Watchlist' | 'Pass') => {
+  if (type === 'Pass') return isPassAction(action);
+  return action === type;
+};
 
 interface Movie {
   id: string;
@@ -25,6 +30,7 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [currentTrailerKey, setCurrentTrailerKey] = useState<string | null>(null);
   const [activeTrailerKey, setActiveTrailerKey] = useState<string | null>(null);
+  const [isTrailerLoading, setIsTrailerLoading] = useState(false);
   const [displayLimit, setDisplayLimit] = useState(36);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
@@ -32,22 +38,81 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
     if (!selectedMovie) {
       setCurrentTrailerKey(null);
       setActiveTrailerKey(null);
+      setIsTrailerLoading(false);
       return;
     }
     const key = selectedMovie.trailer_key || (selectedMovie as any).trailerKey;
     if (key) {
       setCurrentTrailerKey(key);
+      setIsTrailerLoading(false);
     } else {
+      setIsTrailerLoading(true);
       fetchWithUser(`/api/movies/${selectedMovie.id}/trailer`)
         .then(res => res.ok ? res.json() : { trailer_key: null })
         .then(data => {
-          if (data?.trailer_key) {
-            setCurrentTrailerKey(data.trailer_key);
+          setCurrentTrailerKey(data?.trailer_key || null);
+        })
+        .catch(() => {
+          setCurrentTrailerKey(null);
+        })
+        .finally(() => {
+          setIsTrailerLoading(false);
+        });
+    }
+  }, [selectedMovie]);
+
+  const [castMembers, setCastMembers] = useState<string[]>([]);
+  const [isCastLoading, setIsCastLoading] = useState(false);
+  const [movieExtra, setMovieExtra] = useState<{ duration?: string; synopsis?: string }>({});
+
+  useEffect(() => {
+    if (!selectedMovie?.id) {
+      setCastMembers([]);
+      setIsCastLoading(false);
+      setMovieExtra({});
+      return;
+    }
+    setIsCastLoading(true);
+
+    // 1. Fetch credits from TMDB endpoint (returns cast, runtime, overview)
+    fetchWithUser(`/api/movies/${selectedMovie.id}/credits`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data) {
+          if (Array.isArray(data.cast) && data.cast.length > 0) {
+            setCastMembers(data.cast);
+          }
+          if (data.duration || data.synopsis) {
+            setMovieExtra(prev => ({
+              ...prev,
+              duration: data.duration || prev.duration,
+              synopsis: (data.synopsis && data.synopsis !== 'No synopsis available.') ? data.synopsis : prev.synopsis
+            }));
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        setIsCastLoading(false);
+      });
+
+    // 2. Fallback: if selectedMovie is missing synopsis, query direct movie endpoint
+    if (!selectedMovie.synopsis || selectedMovie.synopsis === 'No synopsis available.') {
+      fetchWithUser(`/api/movies/${selectedMovie.id}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(dbMovie => {
+          if (dbMovie) {
+            if (dbMovie.synopsis && dbMovie.synopsis !== 'No synopsis available.') {
+              setMovieExtra(prev => ({ ...prev, synopsis: dbMovie.synopsis }));
+            }
+            if (dbMovie.duration) {
+              setMovieExtra(prev => ({ ...prev, duration: dbMovie.duration }));
+            }
           }
         })
         .catch(() => {});
     }
-  }, [selectedMovie]);
+  }, [selectedMovie?.id]);
 
   const selectedMovieRef = useRef(selectedMovie);
   useEffect(() => {
@@ -89,20 +154,20 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    fetchProfile(true)
+    fetchWithUser(`/api/profile?t=${Date.now()}`)
+      .then(res => res.json())
       .then(data => {
         setMovies(data.history.filter((m: any) => matchesListType(m.action, listType)) as Movie[]);
         setLoading(false);
       })
       .catch(err => {
-        console.error(err);
+        console.error("MovieListView fetch error:", err);
         setLoading(false);
       });
   }, [listType]);
 
   const handleRemove = async (movieId: string) => {
     try {
-      removeMovieFromCache(movieId);
       setMovies(prev => prev.filter(m => m.id !== movieId));
       handleCloseMovie();
       await fetchWithUser(`/api/swipe/${movieId}`, { method: 'DELETE' });
@@ -113,7 +178,6 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
 
   const handleMoveToWatched = async (movieId: string) => {
     try {
-      updateMovieActionInCache(movieId, 'Watched');
       if (listType === 'Watchlist' || listType === 'Pass') {
         setMovies(prev => prev.filter(m => m.id !== movieId));
       } else {
@@ -132,7 +196,6 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
 
   const handleMoveToWatchlist = async (movieId: string) => {
     try {
-      updateMovieActionInCache(movieId, 'Watchlist');
       if (listType === 'Pass') {
         setMovies(prev => prev.filter(m => m.id !== movieId));
       }
@@ -637,154 +700,245 @@ export default function MovieListView({ listType, onBack }: { listType: 'Watched
         {selectedMovie && (() => {
           const imdbId = selectedMovie.imdb_id || (selectedMovie as any).imdbId;
           const imdbUrl = imdbId ? `https://www.imdb.com/title/${imdbId}/` : null;
+          const duration = movieExtra.duration || selectedMovie.duration || "120m";
+          const rawSynopsis = (selectedMovie.synopsis && selectedMovie.synopsis !== 'No synopsis available.') 
+            ? selectedMovie.synopsis 
+            : movieExtra.synopsis;
+          const synopsis = rawSynopsis || (isCastLoading ? "" : "No synopsis available.");
+          const genre = selectedMovie.genre || "";
+          const rating = selectedMovie.rating != null ? selectedMovie.rating : 0;
 
           return (
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" 
+              className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm" 
               onClick={handleCloseMovie}
             >
               <motion.div 
                 initial={{ scale: 0.95, opacity: 0, y: 10 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.95, opacity: 0, y: 10 }}
-                className="bg-[#141414] border border-white/10 p-5 rounded-lg max-w-xs w-full shadow-2xl" 
+                className="relative bg-[#1c1b1b] border border-white/10 p-5 sm:p-6 rounded-2xl max-w-xl md:max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto" 
                 onClick={e => e.stopPropagation()}
               >
-                <div className="flex gap-3.5 mb-5">
-                  {imdbUrl ? (
-                    <a
-                      href={imdbUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="shrink-0 transition-transform hover:scale-105"
-                      title="Open in IMDb"
-                    >
-                      <img 
-                        src={selectedMovie.poster_url} 
-                        loading="lazy"
-                        decoding="async"
-                        className="w-16 h-24 object-cover rounded-md border border-white/10" 
-                        alt={selectedMovie.title ? `Poster for ${selectedMovie.title}` : "Movie poster"} 
-                      />
-                    </a>
-                  ) : (
-                    <div className="shrink-0">
-                      <img 
-                        src={selectedMovie.poster_url} 
-                        loading="lazy"
-                        decoding="async"
-                        className="w-16 h-24 object-cover rounded-md border border-white/10" 
-                        alt={selectedMovie.title ? `Poster for ${selectedMovie.title}` : "Movie poster"} 
-                      />
-                    </div>
-                  )}
+                {/* Top Header Bar with Clean Dismiss (X) that never overlaps buttons */}
+                <div className="flex items-center justify-between pb-3 mb-4 border-b border-white/10">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-white/60">Movie Details</span>
+                  </div>
+                  <button
+                    onClick={handleCloseMovie}
+                    className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                    title="Close"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
 
-                  <div className="flex flex-col justify-center overflow-hidden">
+                <div className="flex flex-col md:flex-row gap-5 md:gap-6">
+                  {/* LEFT SIDE: Poster, Title, Meta, Stars, Synopsis, Cast */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-between space-y-4">
+                    {/* Top Row: Poster + Title + Meta + Star Rating */}
+                    <div className="flex gap-4 items-start">
+                      {imdbUrl ? (
+                        <a
+                          href={imdbUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 transition-transform hover:scale-105"
+                          title="Open in IMDb"
+                        >
+                          <img 
+                            src={selectedMovie.poster_url} 
+                            loading="lazy"
+                            decoding="async"
+                            className="w-20 h-28 sm:w-24 sm:h-36 object-cover rounded-lg shadow-md border border-white/10 shrink-0" 
+                            alt={selectedMovie.title ? `Poster for ${selectedMovie.title}` : "Movie poster"} 
+                          />
+                        </a>
+                      ) : (
+                        <div className="shrink-0">
+                          <img 
+                            src={selectedMovie.poster_url} 
+                            loading="lazy"
+                            decoding="async"
+                            className="w-20 h-28 sm:w-24 sm:h-36 object-cover rounded-lg shadow-md border border-white/10 shrink-0" 
+                            alt={selectedMovie.title ? `Poster for ${selectedMovie.title}` : "Movie poster"} 
+                          />
+                        </div>
+                      )}
+
+                      <div className="flex-1 min-w-0 pr-2">
+                        {imdbUrl ? (
+                          <a
+                            href={imdbUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:underline hover:text-[#F5C518] transition-colors"
+                            title="Open in IMDb"
+                          >
+                            <h3 className="text-lg sm:text-xl font-bold text-white leading-tight mb-1">
+                              {selectedMovie.title}
+                            </h3>
+                          </a>
+                        ) : (
+                          <h3 className="text-lg sm:text-xl font-bold text-white leading-tight mb-1">
+                            {selectedMovie.title}
+                          </h3>
+                        )}
+
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-white/60 mb-2">
+                          {selectedMovie.year && <span>{selectedMovie.year}</span>}
+                          {duration && (
+                            <>
+                              <span>•</span>
+                              <span>{duration}</span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Genre Badges */}
+                        {genre && (
+                          <div className="flex flex-wrap gap-1.5 mb-2.5">
+                            {genre.split(',').map((g: string) => g.trim()).filter(Boolean).slice(0, 3).map((g: string) => (
+                              <span key={g} className="px-2 py-0.5 rounded-md bg-white/10 text-white/80 text-[11px] font-medium border border-white/5">
+                                {g}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Reviews out of 5 Yellow Stars */}
+                        <div className="pt-0.5">
+                          <StarRating rating={rating} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Synopsis Section */}
+                    <div className="space-y-1">
+                      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Synopsis</h4>
+                      {isCastLoading && !rawSynopsis ? (
+                        <div className="text-xs text-white/30 animate-pulse">Loading synopsis...</div>
+                      ) : (
+                        <p className="text-xs sm:text-sm text-white/70 leading-relaxed line-clamp-3 sm:line-clamp-4">
+                          {synopsis}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Main Cast Section */}
+                    <div className="space-y-1.5">
+                      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Main Cast</h4>
+                      {isCastLoading ? (
+                        <div className="text-xs text-white/30 animate-pulse">Loading cast members...</div>
+                      ) : castMembers.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {castMembers.map((actor, idx) => (
+                            <span key={idx} className="text-xs text-white/80 bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
+                              {actor}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-white/40 italic">Cast information unavailable</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* RIGHT SIDE: Action Buttons */}
+                  <div className="w-full md:w-56 shrink-0 flex flex-col justify-center space-y-2.5 md:border-l md:border-white/10 md:pl-6 pt-3 md:pt-0 border-t md:border-t-0 border-white/10">
+                    {listType === 'Watchlist' && (
+                      <button 
+                        onClick={() => handleMoveToWatched(selectedMovie.id)}
+                        className="w-full py-2.5 bg-white text-black text-xs sm:text-sm font-bold rounded-xl hover:bg-gray-200 transition-colors shadow-lg cursor-pointer"
+                      >
+                        Mark as Watched
+                      </button>
+                    )}
+
+                    {(listType === 'Pass' || isPassAction(selectedMovie.action)) && (
+                      <>
+                        <button 
+                          onClick={() => handleMoveToWatchlist(selectedMovie.id)}
+                          className="w-full py-2.5 bg-[#f59e0b] hover:bg-[#d97706] text-black text-xs sm:text-sm font-bold rounded-xl transition-colors shadow-lg cursor-pointer"
+                        >
+                          Add to Watchlist
+                        </button>
+                        <button 
+                          onClick={() => handleMoveToWatched(selectedMovie.id)}
+                          className="w-full py-2.5 bg-white text-black text-xs sm:text-sm font-bold rounded-xl hover:bg-gray-200 transition-colors shadow-lg cursor-pointer"
+                        >
+                          Mark as Watched
+                        </button>
+                      </>
+                    )}
+
+                    {isTrailerLoading ? (
+                      <button 
+                        disabled
+                        className="w-full py-2.5 bg-red-600/70 text-white/90 text-xs sm:text-sm font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-wait"
+                      >
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>Loading Trailer...</span>
+                      </button>
+                    ) : currentTrailerKey ? (
+                      <button 
+                        onClick={() => setActiveTrailerKey(currentTrailerKey)}
+                        className="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-bold rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
+                      >
+                        <Play className="w-4 h-4 fill-current" />
+                        <span>Watch Trailer</span>
+                      </button>
+                    ) : (
+                      <button 
+                        disabled
+                        className="w-full py-2.5 bg-white/5 border border-white/10 text-white/40 text-xs sm:text-sm font-semibold rounded-xl flex items-center justify-center gap-2 cursor-not-allowed"
+                        title="Trailer not available for this movie"
+                      >
+                        <Play className="w-4 h-4 opacity-40" />
+                        <span>Trailer Unavailable</span>
+                      </button>
+                    )}
+
                     {imdbUrl ? (
                       <a
                         href={imdbUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="hover:underline hover:text-[#F5C518] transition-colors"
-                        title="Open in IMDb"
+                        className="w-full py-2.5 bg-[#F5C518] hover:bg-[#e2b616] text-black text-xs sm:text-sm font-bold rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-center cursor-pointer"
                       >
-                        <h3 className="text-base font-bold text-white mb-1 leading-tight truncate">
-                          {selectedMovie.title}
-                        </h3>
+                        Open in IMDb
                       </a>
                     ) : (
-                      <h3 className="text-base font-bold text-white mb-1 leading-tight truncate">
-                        {selectedMovie.title}
-                      </h3>
+                      <a
+                        href={`https://www.themoviedb.org/movie/${selectedMovie.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ backgroundColor: 'rgb(3, 37, 65)' }}
+                        className="w-full py-2.5 hover:opacity-90 text-white text-xs sm:text-sm font-bold rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2 text-center cursor-pointer"
+                      >
+                        Open in TMDb
+                      </a>
                     )}
-                    <div className="flex items-center gap-2 text-xs text-white/60">
-                      <span>{selectedMovie.year}</span>
-                      {selectedMovie.rating != null && (
-                        <span className="flex items-center gap-0.5 text-yellow-400 font-bold">
-                          <Star className="w-3 h-3 fill-current" /> {Number(selectedMovie.rating).toFixed(1)}
-                        </span>
-                      )}
-                    </div>
-                    {selectedMovie.genre && (
-                      <p className="text-[11px] text-white/40 truncate mt-1">{selectedMovie.genre}</p>
-                    )}
+
+                    <button 
+                      onClick={() => handleRemove(selectedMovie.id)}
+                      className="w-full py-2.5 bg-red-500/10 text-red-500 text-xs sm:text-sm font-bold rounded-xl hover:bg-red-500/20 transition-colors cursor-pointer"
+                    >
+                      {(listType === 'Pass' || isPassAction(selectedMovie.action)) ? 'Reset to Swipe Queue' : `Remove from ${listType}`}
+                    </button>
+
+                    <button 
+                      onClick={handleCloseMovie}
+                      className="w-full py-2 bg-transparent text-white/60 text-xs sm:text-sm font-bold rounded-xl hover:text-white transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  {listType === 'Watchlist' && (
-                    <button 
-                      onClick={() => handleMoveToWatched(selectedMovie.id)}
-                      className="w-full py-2 bg-white text-black text-xs font-bold rounded-md hover:bg-gray-200 transition-colors cursor-pointer"
-                    >
-                      Mark as Watched
-                    </button>
-                  )}
-
-                  {(listType === 'Pass' || isPassAction(selectedMovie.action)) && (
-                    <>
-                      <button 
-                        onClick={() => handleMoveToWatchlist(selectedMovie.id)}
-                        className="w-full py-2 bg-[#f59e0b] hover:bg-[#d97706] text-black text-xs font-bold rounded-md transition-colors cursor-pointer"
-                      >
-                        Add to Watchlist
-                      </button>
-                      <button 
-                        onClick={() => handleMoveToWatched(selectedMovie.id)}
-                        className="w-full py-2 bg-white text-black text-xs font-bold rounded-md hover:bg-gray-200 transition-colors cursor-pointer"
-                      >
-                        Mark as Watched
-                      </button>
-                    </>
-                  )}
-
-                  {currentTrailerKey && (
-                    <button 
-                      onClick={() => setActiveTrailerKey(currentTrailerKey)}
-                      className="w-full py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-md transition-colors shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <Play className="w-3.5 h-3.5 fill-current" />
-                      Watch Trailer
-                    </button>
-                  )}
-
-                  {imdbUrl ? (
-                    <a
-                      href={imdbUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full py-2 bg-[#F5C518] hover:bg-[#e2b616] text-black text-xs font-bold rounded-md transition-colors shadow-md flex items-center justify-center gap-1.5 text-center cursor-pointer"
-                    >
-                      Open in IMDb
-                    </a>
-                  ) : (
-                    <a
-                      href={`https://www.themoviedb.org/movie/${selectedMovie.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ backgroundColor: 'rgb(3, 37, 65)' }}
-                      className="w-full py-2 hover:opacity-90 text-white text-xs font-bold rounded-md transition-colors shadow-md flex items-center justify-center gap-1.5 text-center cursor-pointer"
-                    >
-                      Open in TMDb
-                    </a>
-                  )}
-
-                  <button 
-                    onClick={() => handleRemove(selectedMovie.id)}
-                    className="w-full py-2 bg-red-500/10 text-red-500 text-xs font-semibold rounded-md hover:bg-red-500/20 transition-colors cursor-pointer"
-                  >
-                    {(listType === 'Pass' || isPassAction(selectedMovie.action)) ? 'Reset to Swipe Queue' : `Remove from ${listType}`}
-                  </button>
-
-                  <button 
-                    onClick={handleCloseMovie}
-                    className="w-full py-2 bg-transparent text-white/50 text-xs font-semibold rounded-md hover:text-white transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
                 </div>
               </motion.div>
             </motion.div>

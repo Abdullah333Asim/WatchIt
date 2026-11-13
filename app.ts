@@ -6,7 +6,7 @@ import { eq, and, sql, desc } from "drizzle-orm";
 import { getRecommendations } from "./server/gemini";
 import { randomUUID } from "crypto";
 import { requireAuth, AuthRequest } from "./server/middleware";
-import { loadPopularMovies, searchMovieAndSave, fetchMovieTrailer } from "./server/tmdb";
+import { loadPopularMovies, searchMovieAndSave, fetchMovieTrailer, fetchMovieCredits } from "./server/tmdb";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
@@ -157,6 +157,31 @@ export function createApp() {
     }
   });
 
+  app.get("/api/movies/:id/credits", requireAuth, async (req, res) => {
+    const { id } = req.params;
+    try {
+      const data = await fetchMovieCredits(id);
+      res.json(data);
+    } catch (error) {
+      console.error("Get credits error", error);
+      res.json({ cast: [] });
+    }
+  });
+
+  app.get("/api/movies/:id", requireAuth, async (req, res) => {
+    const { id } = req.params;
+    try {
+      const movieRow = (await db.execute(sql`SELECT * FROM movies WHERE id = ${id}`)).rows?.[0] as any;
+      if (movieRow) {
+        return res.json(movieRow);
+      }
+      res.status(404).json({ error: "Movie not found" });
+    } catch (error) {
+      console.error("Get movie error", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/movies", requireAuth, async (req, res) => {
     const userId = (req as AuthRequest).user!.uid;
     const page = parseInt(req.query.page as string) || 1;
@@ -236,12 +261,31 @@ export function createApp() {
     }
 
     try {
-      await db.delete(swipes).where(and(eq(swipes.userId, userId), eq(swipes.movieId, movieId)));
-      await db.insert(swipes).values({ userId, movieId, action });
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Post swipe error", error);
-      res.status(500).json({ error: "Internal server error" });
+      await db.insert(swipes)
+        .values({ userId, movieId, action, timestamp: new Date() })
+        .onConflictDoUpdate({
+          target: [swipes.userId, swipes.movieId],
+          set: { action, timestamp: new Date() }
+        });
+      return res.json({ success: true });
+    } catch (insertError: any) {
+      console.error("Swipe Save Failed (Insert/Upsert):", insertError);
+      try {
+        await db.update(swipes)
+          .set({ action, timestamp: new Date() })
+          .where(and(eq(swipes.userId, userId), eq(swipes.movieId, movieId)));
+
+        await db.execute(sql`
+          INSERT INTO swipes (user_id, movie_id, action, timestamp)
+          VALUES (${userId}, ${movieId}, ${action}, NOW())
+          ON CONFLICT (user_id, movie_id) DO UPDATE
+          SET action = ${action}, timestamp = NOW()
+        `);
+        return res.json({ success: true });
+      } catch (fallbackError) {
+        console.error("Swipe Save Failed:", fallbackError);
+        return res.status(500).json({ error: "Internal server error" });
+      }
     }
   });
 
@@ -277,9 +321,9 @@ export function createApp() {
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
-      // Parallel execution: fetch user profile and swipe history concurrently
-      // Optimized projection: only select lightweight fields needed for the grid, excluding heavy synopsis & trailer text
-      const [userRows, historyResult] = await Promise.all([
+
+      // Parallel execution: fetch user profile, SQL aggregated counts, and swipe history concurrently
+      const [userRows, countsResult, historyResult] = await Promise.all([
         db.select({
           id: users.id,
           name: users.name,
@@ -290,13 +334,24 @@ export function createApp() {
         }).from(users).where(eq(users.id, userId)),
         db.execute(sql`
           SELECT 
+            COUNT(*) FILTER (WHERE action = 'Watched')::int AS watched,
+            COUNT(*) FILTER (WHERE action IN ('Pass', 'Not Watched'))::int AS pass,
+            COUNT(*) FILTER (WHERE action = 'Watchlist')::int AS watchlist
+          FROM swipes
+          WHERE user_id = ${userId}
+        `),
+        db.execute(sql`
+          SELECT 
             m.id, 
             m.title, 
             m.year, 
             m.genre, 
+            m.duration,
+            m.synopsis, 
             m.poster_url, 
             m.rating, 
             m.imdb_id, 
+            m.trailer_key, 
             s.action 
           FROM swipes s 
           JOIN movies m ON s.movie_id = m.id 
@@ -310,12 +365,20 @@ export function createApp() {
         return res.status(404).json({ error: "User not found" });
       }
 
+      const countsRow = (countsResult.rows || countsResult)[0] as any || {};
+      const counts = {
+        watched: Number(countsRow.watched || 0),
+        pass: Number(countsRow.pass || 0),
+        watchlist: Number(countsRow.watchlist || 0)
+      };
+
       const history = (historyResult.rows || historyResult) as any[];
       
       res.json({
         ...user,
         avatar_url: user.avatarUrl,
         taste_dna: user.tasteDna ? JSON.parse(user.tasteDna) : {},
+        counts,
         history
       });
     } catch (error) {

@@ -77,6 +77,7 @@ export default function App() {
   }, []);
 
   const navigateToTab = (tab: Tab, listType?: 'Watched' | 'Watchlist' | 'Pass', replace = false) => {
+    window.dispatchEvent(new CustomEvent('watchit:tab-activated', { detail: { tab, listType } }));
     if (tab === activeTab && (!listType || listType === movieListType)) {
       return;
     }
@@ -114,6 +115,7 @@ export default function App() {
       case "swipe": return <SwipeView onColorExtracted={setAccentColor} />;
       case "profile": return (
         <ProfileView 
+          isActive={activeTab === 'profile'}
           onViewList={(type) => navigateToTab("movies", type)} 
         />
       );

@@ -211,3 +211,60 @@ export async function fetchMovieTrailer(id: string): Promise<string | null> {
   }
   return null;
 }
+
+const creditsCache = new Map<string, { cast: string[]; duration?: string; synopsis?: string }>();
+
+export async function fetchMovieCredits(id: string): Promise<{ cast: string[]; duration?: string; synopsis?: string }> {
+  if (creditsCache.has(id)) {
+    return creditsCache.get(id)!;
+  }
+
+  let dbDuration: string | undefined;
+  let dbSynopsis: string | undefined;
+  try {
+    const movieRow = (await db.execute(sql`SELECT duration, synopsis FROM movies WHERE id = ${id}`)).rows?.[0] as any;
+    if (movieRow) {
+      if (movieRow.duration) dbDuration = movieRow.duration;
+      if (movieRow.synopsis && movieRow.synopsis !== 'No synopsis available.') dbSynopsis = movieRow.synopsis;
+    }
+  } catch (_) {}
+
+  if (!TMDB_API_KEY) {
+    return { cast: [], duration: dbDuration, synopsis: dbSynopsis };
+  }
+  try {
+    const res = await fetch(`${TMDB_BASE_URL}/movie/${encodeURIComponent(id)}?api_key=${TMDB_API_KEY}&language=en-US&append_to_response=credits`);
+    if (!res.ok) {
+      return { cast: [], duration: dbDuration, synopsis: dbSynopsis };
+    }
+    const data = await res.json();
+    const cast = (data.credits?.cast || [])
+      .slice(0, 5)
+      .map((c: any) => c.name)
+      .filter(Boolean);
+
+    const duration = data.runtime ? `${data.runtime}m` : dbDuration;
+    const synopsis = data.overview || dbSynopsis;
+
+    const result = { cast, duration, synopsis };
+    creditsCache.set(id, result);
+
+    if (duration || synopsis) {
+      try {
+        await db.execute(sql`
+          UPDATE movies 
+          SET 
+            duration = COALESCE(NULLIF(duration, ''), ${duration || null}),
+            synopsis = CASE WHEN synopsis = 'No synopsis available.' OR synopsis IS NULL THEN ${synopsis || 'No synopsis available.'} ELSE synopsis END
+          WHERE id = ${id}
+        `);
+      } catch (_) {}
+    }
+
+    return result;
+  } catch (e) {
+    console.error("Failed to fetch credits from TMDB", e);
+    return { cast: [], duration: dbDuration, synopsis: dbSynopsis };
+  }
+}
+
