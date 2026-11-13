@@ -213,11 +213,12 @@ During the Weighted Round Robin experiment (2:1:1 ratio), Envoy's structured JSO
 ### Conclusions
 
 **1. Which strategy would you choose for HTTP and for gRPC, and why?**
-Based on our results, I would choose `LEAST_REQUEST` combined with Active Health Checking for both HTTP and gRPC. The Part D experiments proved that standard Round Robin is entirely blind to internal server health. When Replica B degraded (500ms delay), Round Robin stubbornly kept sending it 33% of the traffic, crippling the user experience. `LEAST_REQUEST` dynamically adapted to the bottleneck by inspecting inflight requests, shifting traffic to the healthy nodes and preserving system stability. 
+I would choose the Least Request strategy with active health checks for both. Our tests showed that standard Round Robin is completely blind to server health. When we intentionally slowed down Replica B, Round Robin kept stubbornly sending it a third of the traffic, which ruined the overall response times. Least Request, on the other hand, actually noticed the backup and smartly shifted traffic to the healthy servers, keeping the app running fast.
 
 **2. Give one workload where you would choose differently.**
-I would choose standard `ROUND_ROBIN` over `LEAST_REQUEST` if the backend service was purely running extremely fast, highly predictable, uniform background tasks (e.g., parsing a tiny fixed-size string or returning a static timestamp). If every request takes exactly 2ms to compute, monitoring "inflight requests" adds unnecessary CPU overhead to the proxy. Standard Round Robin would distribute the uniform load perfectly with less proxy overhead.
+I would stick with standard Round Robin if the servers were only handling incredibly fast, identical tasks (like just returning the current time or basic text). If every single request finishes in exactly 2 milliseconds, making the proxy constantly stop to count "active requests" just wastes processing power. Round Robin easily splits up uniform work with much less effort.
 
 **3. What happens if Envoy stops? Suggest one improvement.**
-If the Envoy proxy container crashes, the entire system experiences a catastrophic outage because Envoy is a single point of failure (SPOF). All HTTP and gRPC traffic hits a dead end, even if Replicas A, B, and C are perfectly healthy and running. 
-**Improvement:** To fix this, we should deploy a highly available proxy tier. We would run multiple Envoy proxy instances (e.g., Envoy 1 and Envoy 2) and place a Layer 4 external load balancer (like AWS Network Load Balancer or a floating IP via Keepalived) in front of them. If Envoy 1 crashes, the external balancer instantly reroutes ingress traffic to Envoy 2.
+If the Envoy proxy crashes, the entire app goes offline. It acts as a single point of failure, meaning that even if all three of our backend servers are perfectly healthy, user requests just hit a dead end.
+
+**Improvement**: To fix this, we need a backup. We should run multiple Envoy proxies side-by-side and put a main network load balancer in front of them. That way, if one proxy crashes, the main balancer instantly reroutes traffic to the surviving proxy.
